@@ -1,0 +1,3 @@
+[submodule "deps/NFHTTP"]
+	path = deps/NFHTTP
+	url = https://github.com/spotify/NFHTTP.git
