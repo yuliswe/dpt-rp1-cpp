@@ -1,7 +1,7 @@
 # Welcome to dpt-rp1-cpp
 
 This is a C++ library for file syncing with Sony DPT-RP1 reader, inspired by dpt-rp1-py.
-In addition to file syncing, our library provides version control using git. The goal is to prevent file loss due to user mistake for software bugs that may happen during sycing.
+In addition to file syncing, our library provides version control using git. The goal is to prevent file loss due to user mistakes or software bugs that may happen during sycing.
 
 ## Simplest Example
 
