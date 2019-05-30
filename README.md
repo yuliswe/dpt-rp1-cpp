@@ -1,7 +1,43 @@
-### Conflict Resolution Scheme
+# Welcome to dpt-rp1-cpp
+
+This is a C++ library for file syncing with Sony DPT-RP1 reader, inspired by dpt-rp1-py.
+In addition to file syncing, our library provides version control using git. The goal is to prevent file loss due to user mistake for software bugs that may happen during sycing.
+
+## Simplest Example
+
+    #include <dptrp1.h>
+    #include <iostream>
+
+    using namespace std;
+    using namespace dpt;
+
+    int main(int argn, char** argv)
+    {
+        try {
+            Dpt dp;
+            dp.setSyncDir("/Users/yuli/Documents/test");
+            dp.setClientIdPath("/Users/yuli/lab/dptid.data");
+            dp.setPrivateKeyPath("/Users/yuli/lab/dptkey.data");
+            dp.authenticate();
+            dp.setupSyncDir();
+            if (argn > 1) {
+                dp.safeSyncAllFiles();
+            } else {
+                dp.safeSyncAllFiles(DryRun);
+            }
+        } catch (char const* e) {
+            cerr << "An error has occured: " << endl;
+            cerr << e << endl;
+        }
+    }
+
+
+## Conflict Resolution Scheme
+
+### Conflicts during syncing is resolve as the following:
 
 DPT\Local | new | modified | deleted | renamed | renamed & modified
---------------------------------------------------------------------
+----------|-----|----------|---------|---------|-------------------
 new       | T   | _        | _       | _       | _
 modified  | _   | _        | D       | T       | x
 deleted   | _   | L        | _       | L       | L
