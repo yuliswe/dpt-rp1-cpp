@@ -16,6 +16,7 @@ add_library(
 )
 
 file(COPY templates/rev_db DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+file(COPY templates/gitignore DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
 target_include_directories(
     ${PROJECT_NAME}
@@ -70,7 +71,7 @@ target_link_directories(
 endif(WIN32)
 
 if(APPLE)
-find_package(Boost REQUIRED)
+find_package(Boost COMPONENTS filesystem REQUIRED)
 find_package(OpenSSL REQUIRED)
 MESSAGE("Boost_INCLUDE_DIRS = ${Boost_INCLUDE_DIRS}")
 MESSAGE("Boost_LIBRARIES = ${Boost_LIBRARIES}")

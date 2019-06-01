@@ -68,7 +68,7 @@ void Dpt::authenticate()
     m_messager("Connecting to DPT-RP1...");
 
     try {
-
+        
         string client_id;
         ifstream inf(m_client_id_path.string(), std::ios_base::in);
         inf >> client_id;
@@ -87,6 +87,7 @@ void Dpt::authenticate()
         write_json(buf, data, false);
         string json = buf.str();
         /* send request */
+        m_cookies.clear();
         auto request = httpRequest("/auth");
         request->setMethod("PUT");
         request->setData((unsigned char*)json.c_str(), json.length());
@@ -1252,10 +1253,19 @@ void Dpt::setupSyncDir()
         git("init");
         git("branch dpt");
     }
+    path git_ignore = m_sync_dir / ".gitignore";
+    if (! filesystem::exists(git_ignore)) {
+        filesystem::copy_file("gitignore", git_ignore);
+    }
+    path hidden_dir = m_sync_dir / ".app";
+    if (! filesystem::exists(hidden_dir)) {
+        filesystem::create_directory(hidden_dir);
+    }
     path rev_db = m_sync_dir / ".rev";
     if (! filesystem::exists(rev_db)) {
         filesystem::copy_file("rev_db", rev_db);
     }
+    
 }
 
 void Dpt::setMessager(std::function<void(string)> me) 
