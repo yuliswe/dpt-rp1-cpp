@@ -7,8 +7,10 @@
 #include <boost/property_tree/json_parser.hpp>
 #include <boost/filesystem.hpp>
 #include <NFHTTP/NFHTTP.h>
-#include <dtree.h>
-#include <revdb.h>
+#include <iostream>
+#include "dtree.h"
+#include "revdb.h"
+#include "logger.h"
 
 namespace dpt {
 
@@ -60,7 +62,10 @@ namespace dpt {
             unordered_map<string,shared_ptr<LNode>> m_local_path_nodes;
             unordered_map<string,shared_ptr<DNode>> m_dpt_revision_nodes;
             unordered_map<string,shared_ptr<LNode>> m_local_revision_nodes;
-            std::function<void(string)> m_messager = [](string) { };
+            std::function<void(string const&)> m_messager = [](string const&) { };
+            
+            ostream* m_logger = &std::cerr;
+            ostream& logger() const;
             
             vector<shared_ptr<DNode const>> m_local_only_nodes;
             vector<shared_ptr<DNode const>> m_dpt_only_nodes;
@@ -121,7 +126,8 @@ namespace dpt {
             path syncDir() const;
             void setSyncDir(path const&);
             void safeSyncAllFiles(DryRunFlag dryrun = NormalRun);
-            void setMessager(std::function<void(string)>);
+            void setMessager(std::function<void(string const&)>);
+            void setLogger(ostream&);
     };
 
     class HttpSigner {

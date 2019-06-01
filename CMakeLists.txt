@@ -10,9 +10,11 @@ add_library(
     src/dptrp1.cc
     src/dtree.cc
     src/revdb.cc
+    src/logger.cc
     include/dptrp1.h
     include/dtree.h
     include/revdb.h
+    include/logger.h
 )
 
 file(COPY templates/rev_db DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
@@ -84,10 +86,7 @@ set_target_properties(
         FRAMEWORK_VERSION A
         MACOSX_FRAMEWORK_IDENTIFIER com.dptair.dptrp1
         MACOSX_FRAMEWORK_INFO_PLIST ${CMAKE_SOURCE_DIR}/Info.plist
-        PUBLIC_HEADER 
-            "include/dptrp1.h" 
-            "include/dtree.h" 
-            "include/revdb.h"
+        PUBLIC_HEADER "include/dptrp1.h include/dtree.h include/revdb.h include/logger.h"
         XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY "Yu Li"
 )
 target_include_directories(

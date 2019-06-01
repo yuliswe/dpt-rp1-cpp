@@ -97,7 +97,7 @@ void Dpt::authenticate()
         string const& set_cookie = headers.at("Set-Cookie");
         string const& credentials = set_cookie.substr(12, 64);
         #if DEBUG_AUTH
-            cerr << "using credential: " << credentials << endl;
+            logger() << "using credential: " << credentials << endl;
         #endif 
         m_cookies["Credentials"] = credentials;
 
@@ -158,18 +158,18 @@ shared_ptr<DptRequest> Dpt::httpRequest(string url) const
 shared_ptr<DptResponse> Dpt::sendRequest(shared_ptr<DptRequest> request) const
 {    
     #if DEBUG_REQUEST
-        cerr << "request: " << request->serialise() << endl;
-        cerr << "request body: " << request->body().substr(0,1000) << endl;
+        logger() << "request: " << request->serialise() << endl;
+        logger() << "request body: " << request->body().substr(0,1000) << endl;
     #endif
     static auto client = nativeformat::http::createClient(nativeformat::http::standardCacheLocation(), "NFHTTP-" + nativeformat::http::version());
     auto resp = static_pointer_cast<DptResponse>(client->performRequestSynchronously(request));
     #if DEBUG_REQUEST
-        cerr << "response: " << resp->serialise() << endl;
-        cerr << "response body: "<< resp->body().substr(0,1000) << endl;
+        logger() << "response: " << resp->serialise() << endl;
+        logger() << "response body: "<< resp->body().substr(0,1000) << endl;
     #endif
     if (resp->statusCode() < 200 || resp->statusCode() >= 300) {
-        cerr << "Received error response: " << resp->serialise() << endl;
-        cerr << "Request responsible for the error was: " << request->serialise() << endl;
+        logger() << "Received error response: " << resp->serialise() << endl;
+        logger() << "Request responsible for the error was: " << request->serialise() << endl;
         throw "request failure";
     }
     return resp;
@@ -376,7 +376,7 @@ path Dpt::syncDir() const
 void Dpt::moveBetweenDpt(path const& source, path const& dest)
 {
     #if DEBUG_FILE_IO
-    cerr << "moving dpt~>dpt: " << source << " ~> " << dest << endl;
+    logger() << "moving dpt~>dpt: " << source << " ~> " << dest << endl;
     #endif
     shared_ptr<DNode const> source_node = m_dpt_path_nodes[source.string()];
     shared_ptr<DNode const> dest_parent_node = m_dpt_path_nodes[dest.parent_path().string()];
@@ -396,7 +396,7 @@ void Dpt::moveBetweenDpt(path const& source, path const& dest)
 void Dpt::moveBetweenLocal(path const& source, path const& dest)
 {
     #if DEBUG_FILE_IO
-    cerr << "moving local~>local: " << source << " ~> " << dest << endl;
+    logger() << "moving local~>local: " << source << " ~> " << dest << endl;
     #endif
     copyBetweenLocal(source, dest);
     deleteFromLocal(source);
@@ -405,7 +405,7 @@ void Dpt::moveBetweenLocal(path const& source, path const& dest)
 void Dpt::copyBetweenDpt(path const& source, path const& dest)
 {
     #if DEBUG_FILE_IO
-    cerr << "copying dpt~>dpt: " << source << " ~> " << dest << endl;
+    logger() << "copying dpt~>dpt: " << source << " ~> " << dest << endl;
     #endif
     /* BFS */
     shared_ptr<DNode const> source_node = m_dpt_path_nodes[source.string()];
@@ -433,7 +433,7 @@ void Dpt::copyBetweenDpt(path const& source, path const& dest)
             }
             /* process directory */
             #if DEBUG_FILE_IO
-            cerr << "creating dpt directory: " << n_dest_path << endl;
+            logger() << "creating dpt directory: " << n_dest_path << endl;
             #endif
             Json js;
             Json doc_copy_info;
@@ -447,7 +447,7 @@ void Dpt::copyBetweenDpt(path const& source, path const& dest)
         } else {
             /* process file */
             #if DEBUG_FILE_IO
-            cerr << "copying dpt file: " << n_dest_path << endl;
+            logger() << "copying dpt file: " << n_dest_path << endl;
             #endif 
             Json js;
             Json doc_copy_info;
@@ -533,7 +533,7 @@ void Dpt::computeSyncFiles()
     /* decide what to do with these nodes */
     for (auto const& local : m_local_only_nodes) {
         #if DEBUG_CONFLICT
-            cerr << "--------------------- processing ---------------------" << endl
+            logger() << "--------------------- processing ---------------------" << endl
                  << local->filename() << endl 
                  << "no matching dpt file" << endl 
                  << "------------------------------------------------------" << endl;
@@ -555,7 +555,7 @@ void Dpt::computeSyncFiles()
     }
     for (auto const& dpt : m_dpt_only_nodes) {
         #if DEBUG_CONFLICT
-            cerr << "--------------------- processing ---------------------" << endl
+            logger() << "--------------------- processing ---------------------" << endl
                  << "no matching local file" << endl 
                  << dpt->filename() << endl 
                  << "------------------------------------------------------" << endl;
@@ -582,7 +582,7 @@ void Dpt::computeSyncFiles()
         auto const& local = ld->first;
         auto const& dpt = ld->second;
         #if DEBUG_CONFLICT
-            cerr << "--------------------- processing ---------------------" << endl
+            logger() << "--------------------- processing ---------------------" << endl
                  << local->filename() << endl 
                  << dpt->filename() << endl
                  << "------------------------------------------------------" << endl;
@@ -593,7 +593,7 @@ void Dpt::computeSyncFiles()
             assert(ld < moved_nodes_offset);
             /* both files are new, conflict! */
             #if DEBUG_CONFLICT
-                cerr << "both files are new, conflict." << endl;
+                logger() << "both files are new, conflict." << endl;
             #endif
             // if (local->lastModifiedTime() > dpt->lastModifiedTime()) {
             //     /* local is newer */
@@ -610,71 +610,71 @@ void Dpt::computeSyncFiles()
             // }
         } else {
             #if DEBUG_CONFLICT
-                cerr << "relpath was seen before" << endl;
+                logger() << "relpath was seen before" << endl;
             #endif
             if (db_row[LocalRev] == local->rev()) {
                 #if DEBUG_CONFLICT
-                    cerr << "local version was unchanged" << endl;
+                    logger() << "local version was unchanged" << endl;
                 #endif
                 if (db_row[DptRev] == dpt->rev()) {
                     #if DEBUG_CONFLICT
-                        cerr << "dpt version was unchanged" << endl;
+                        logger() << "dpt version was unchanged" << endl;
                     #endif
                     /* file is unchanged */
                     if (local->relPath() != dpt->relPath()) {
                         #if DEBUG_CONFLICT
-                            cerr << "two files have different paths" << endl;
+                            logger() << "two files have different paths" << endl;
                         #endif
                         /* need to sync path */
                         if (local->lastModifiedTime() > dpt->lastModifiedTime()) {
                             #if DEBUG_CONFLICT
-                                cerr << "local version have later last-modified date. will move dpt file" << endl;
+                                logger() << "local version have later last-modified date. will move dpt file" << endl;
                             #endif
                             m_prepared_dpt_move.push_back(make_pair(dpt, local));
                         } else {
                             #if DEBUG_CONFLICT
-                                cerr << "dpt version have later last-modified date. will move local file/" << endl;
+                                logger() << "dpt version have later last-modified date. will move local file/" << endl;
                             #endif
                             m_prepared_local_move.push_back(make_pair(dpt, local));
                         }
                     }
                 } else {
                     #if DEBUG_CONFLICT
-                        cerr << "dpt version has been modified and is the newer version" << endl;
+                        logger() << "dpt version has been modified and is the newer version" << endl;
                     #endif
                     /* dpt file is newer */
                     m_prepared_overwrite_from_dpt.push_back(dpt);
                     if (local->relPath() != dpt->relPath()) {
                         #if DEBUG_CONFLICT
-                            cerr << "two files have different paths. local version will be deleted." << endl;
+                            logger() << "two files have different paths. local version will be deleted." << endl;
                         #endif
                         m_prepared_local_delete.push_back(local);
                     }
                 }
             } else {
                 #if DEBUG_CONFLICT
-                    cerr << "local version has been modified" << endl;
+                    logger() << "local version has been modified" << endl;
                 #endif
                 if (db_row[DptRev] == dpt->rev()) {
                     #if DEBUG_CONFLICT
-                        cerr << "dpt version was unchanged" << endl;
+                        logger() << "dpt version was unchanged" << endl;
                     #endif
                     /* local file is newer */
                     m_prepared_overwrite_to_dpt.push_back(local);
                     if (local->relPath() != dpt->relPath()) {
                         #if DEBUG_CONFLICT
-                            cerr << "two files have different paths. dpt version will be deleted." << endl;
+                            logger() << "two files have different paths. dpt version will be deleted." << endl;
                         #endif
                         m_prepared_dpt_delete.push_back(dpt);
                     }
                 } else {
                     #if DEBUG_CONFLICT
-                        cerr << "dpt version has been modified. conflict!" << endl;
+                        logger() << "dpt version has been modified. conflict!" << endl;
                     #endif
                     /* both are modified, conflict! */
                     if (local->lastModifiedTime() > dpt->lastModifiedTime()) {
                         #if DEBUG_CONFLICT
-                            cerr << "local version have later last-modified date. use local file and delete dpt file" << endl;
+                            logger() << "local version have later last-modified date. use local file and delete dpt file" << endl;
                         #endif
                         /* local is newer */
                         m_prepared_overwrite_to_dpt.push_back(local);
@@ -683,7 +683,7 @@ void Dpt::computeSyncFiles()
                         }
                     } else {
                         #if DEBUG_CONFLICT
-                            cerr << "dpt version have later last-modified date. use dpt file and delete local file" << endl;
+                            logger() << "dpt version have later last-modified date. use dpt file and delete local file" << endl;
                         #endif
                         /* dpt is newer */
                         m_prepared_overwrite_from_dpt.push_back(dpt);
@@ -715,15 +715,15 @@ void Dpt::updateRevForNode(shared_ptr<DNode const> local, shared_ptr<DNode const
         symmetricDiff(local->children(), dpt->children(), only_local, only_dpt, both);
         if (! (only_local.empty() && only_dpt.empty())) {
 //*
-    cerr << "only_local: ";
-    for (auto const& i : only_local) { cerr << "(" << i->filename() << ") "; }
-    cerr << endl;
-    cerr << "only_dpt: ";
-    for (auto const& i : only_dpt) { cerr << "(" << i->filename() << ") "; }
-    cerr << endl;
-    cerr << "both: ";
-    for (auto const& i : both) { cerr << "(" << i.first->filename() << ") "; }
-    cerr << endl;
+    logger() << "only_local: ";
+    for (auto const& i : only_local) { logger() << "(" << i->filename() << ") "; }
+    logger() << endl;
+    logger() << "only_dpt: ";
+    for (auto const& i : only_dpt) { logger() << "(" << i->filename() << ") "; }
+    logger() << endl;
+    logger() << "both: ";
+    for (auto const& i : both) { logger() << "(" << i.first->filename() << ") "; }
+    logger() << endl;
 //*/
             throw "local tree and dpt tree are not identical";
         }
@@ -746,15 +746,15 @@ void Dpt::computeSyncFilesInNode(shared_ptr<DNode const> local, shared_ptr<DNode
     symmetricDiff(local->children(), dpt->children(), only_local, only_dpt, both);
 #if DEBUG
 /*
-    cerr << "only_local: ";
-    for (auto const& i : only_local) { cerr << "(" << i->filename() << ") "; }
-    cerr << endl;
-    cerr << "only_dpt: ";
-    for (auto const& i : only_dpt) { cerr << "(" << i->filename() << ") "; }
-    cerr << endl;
-    cerr << "both: ";
-    for (auto const& i : both) { cerr << "(" << i.first->filename() << ") "; }
-    cerr << endl;
+    logger() << "only_local: ";
+    for (auto const& i : only_local) { logger() << "(" << i->filename() << ") "; }
+    logger() << endl;
+    logger() << "only_dpt: ";
+    for (auto const& i : only_dpt) { logger() << "(" << i->filename() << ") "; }
+    logger() << endl;
+    logger() << "both: ";
+    for (auto const& i : both) { logger() << "(" << i.first->filename() << ") "; }
+    logger() << endl;
 //*/
 #endif
     m_local_only_nodes.insert(m_local_only_nodes.end(),only_local.begin(), only_local.end());
@@ -775,7 +775,7 @@ void Dpt::computeSyncFilesInNode(shared_ptr<DNode const> local, shared_ptr<DNode
 void Dpt::overwriteFromDpt(path const& source, path const& dest)
 {
     #if DEBUG_FILE_IO
-    cerr << "copying dpt~>local: " << source << " ~> " << dest << endl;
+    logger() << "copying dpt~>local: " << source << " ~> " << dest << endl;
     #endif
     // boost::system::error_code error;
     // create_directories(dest.parent_path(), error);
@@ -804,17 +804,17 @@ void Dpt::overwriteFromDpt(path const& source, path const& dest)
             }
             /* process directory */
             #if DEBUG_FILE_IO
-            cerr << "creating directory: " << n_dest_path << endl;
+            logger() << "creating directory: " << n_dest_path << endl;
             #endif
             create_directory(n_dest_path);
         } else {
             /* process file */
-            cerr << "receiving: " << n_dest_path << endl;
+            logger() << "receiving: " << n_dest_path << endl;
             auto request = httpRequest("/documents/" + n->id() + "/file");
             request->setMethod("GET");
             auto response = sendRequest(request);
             #if DEBUG_FILE_IO
-            cerr << "writing file: " << n_dest_path << endl;
+            logger() << "writing file: " << n_dest_path << endl;
             #endif
             ofstream of(n_dest_path.string(), std::ios_base::binary|std::ios_base::trunc);
             size_t bytes;
@@ -837,7 +837,7 @@ bool dpt::syncable(path const& path)
 
 void Dpt::overwriteToDpt(path const& source, path const& dest) {
     #if DEBUG_FILE_IO
-    cerr << "copying local~>dpt: " << source << " ~> " << dest << endl;
+    logger() << "copying local~>dpt: " << source << " ~> " << dest << endl;
     #endif
     /* keep track of created folder ids */
     shared_ptr<DNode const> dest_parent_node = m_dpt_path_nodes[dest.parent_path().string()];
@@ -868,7 +868,7 @@ void Dpt::overwriteToDpt(path const& source, path const& dest) {
             }
             /* create directory under n */
             #if DEBUG_FILE_IO
-            cerr << "creating directory: " << n_dest_path << endl;
+            logger() << "creating directory: " << n_dest_path << endl;
             #endif
             auto new_node = make_shared<DNode>();
             new_node->setPath(n_dest_path.string());
@@ -884,7 +884,7 @@ void Dpt::overwriteToDpt(path const& source, path const& dest) {
         } else {
             /* process file */
             #if DEBUG_FILE_IO
-            cerr << "creating file: " << n_dest_path << endl;
+            logger() << "creating file: " << n_dest_path << endl;
             #endif
             Json js;
             js.put("parent_folder_id", m_dpt_path_nodes[n_dest_path.parent_path().string()]->id());
@@ -892,7 +892,7 @@ void Dpt::overwriteToDpt(path const& source, path const& dest) {
             Json resp = sendJson("POST", "/documents2", js);
             string file_id = resp.get<string>("document_id");
             #if DEBUG_FILE_IO
-            cerr << "writing file: " << n_dest_path << endl;
+            logger() << "writing file: " << n_dest_path << endl;
             #endif
             ifstream inf(n.string(), std::ios_base::in|std::ios_base::binary);
             /* get size of file */
@@ -917,7 +917,7 @@ void Dpt::overwriteToDpt(path const& source, path const& dest) {
             char message[static_cast<size_t>(offset)];
             ss.read(message, offset);
             request->setData(reinterpret_cast<unsigned char const*>(message), offset);
-            cerr << readResponse(sendRequest(request)) << endl;
+            logger() << readResponse(sendRequest(request)) << endl;
         }
     }
 }
@@ -977,111 +977,98 @@ void Dpt::deleteFromDpt(path const& dpt)
 void Dpt::reportComputedSyncFiles()
 {
     if (! m_prepared_dpt_delete.empty()) {
-        cerr << "These files will be deleted from DPT-RP1:" << endl;
+        logger() << "These files will be deleted from DPT-RP1:" << endl;
         for (auto const& i : m_prepared_dpt_delete) {
-            cerr << " - ";
+            logger() << " - ";
             if (i->isDir()) {
-                cerr << "(folder) ";
+                logger() << "(folder) ";
             }
-            cerr << i->relPath() << endl;
+            logger() << i->relPath() << endl;
         }
-        cerr << endl;
+        logger() << endl;
     }
     if (! m_prepared_local_delete.empty()) {
-        cerr << "These local files will be deleted:" << endl;
+        logger() << "These local files will be deleted:" << endl;
         for (auto const& i : m_prepared_local_delete) {
-            cerr << " - ";
+            logger() << " - ";
             if (i->isDir()) {
-                cerr << "(folder) ";
+                logger() << "(folder) ";
             }
-            cerr << i->relPath() << endl;
+            logger() << i->relPath() << endl;
         }
-        cerr << endl;
+        logger() << endl;
     }
     if (! m_prepared_local_new.empty()) {
-        cerr << "These files will be created on DPT-RP1:" << endl;
+        logger() << "These files will be created on DPT-RP1:" << endl;
         for (auto const& i : m_prepared_local_new) {
-            cerr << " - ";
+            logger() << " - ";
             if (i->isDir()) {
-                cerr << "(folder) ";
+                logger() << "(folder) ";
             }
-            cerr << i->relPath() << endl;
+            logger() << i->relPath() << endl;
         }
-        cerr << endl;
+        logger() << endl;
     }
     if (! m_prepared_dpt_new.empty()) {
-        cerr << "These local files will be created:" << endl;
+        logger() << "These local files will be created:" << endl;
         for (auto const& i : m_prepared_dpt_new) {
-            cerr << " - ";
+            logger() << " - ";
             if (i->isDir()) {
-                cerr << "(folder) ";
+                logger() << "(folder) ";
             }
-            cerr << i->relPath() << endl;
+            logger() << i->relPath() << endl;
         }
-        cerr << endl;
+        logger() << endl;
     }
     if (! m_prepared_overwrite_to_dpt.empty()) {
-        cerr << "These files will be updated on DPT-RP1:" << endl;
+        logger() << "These files will be updated on DPT-RP1:" << endl;
         for (auto const& i : m_prepared_overwrite_to_dpt) {
-            cerr << " - ";
+            logger() << " - ";
             if (i->isDir()) {
-                cerr << "(folder) ";
+                logger() << "(folder) ";
             }
-            cerr << i->relPath() << endl;
+            logger() << i->relPath() << endl;
         }
-        cerr << endl;
+        logger() << endl;
     }
     if (! m_prepared_overwrite_from_dpt.empty()) {
-        cerr << "These local files will be updated:" << endl;
+        logger() << "These local files will be updated:" << endl;
         for (auto const& i : m_prepared_overwrite_from_dpt) {
-            cerr << " - ";
+            logger() << " - ";
             if (i->isDir()) {
-                cerr << "(folder) ";
+                logger() << "(folder) ";
             }
-            cerr << i->relPath() << endl;
+            logger() << i->relPath() << endl;
         }
-        cerr << endl;
+        logger() << endl;
     }
     if (! m_prepared_dpt_move.empty()) {
-        cerr << "These DPT-RP1 files will be moved:" << endl;
+        logger() << "These DPT-RP1 files will be moved:" << endl;
         for (auto const& i : m_prepared_dpt_move) {
-            cerr << " - ";
+            logger() << " - ";
             if (i.first->isDir()) {
-                cerr << "(folder) ";
+                logger() << "(folder) ";
             }
-            cerr << i.first->relPath() << " ~> " << i.second->relPath() << endl;
+            logger() << i.first->relPath() << " ~> " << i.second->relPath() << endl;
         }
-        cerr << endl;
+        logger() << endl;
     }
     if (! m_prepared_local_move.empty()) {
-        cerr << "These local files will be moved:" << endl;
+        logger() << "These local files will be moved:" << endl;
         for (auto const& i : m_prepared_local_move) {
-            cerr << " - ";
+            logger() << " - ";
             if (i.first->isDir()) {
-                cerr << "(folder) ";
+                logger() << "(folder) ";
             }
-            cerr << i.first->relPath() << " ~> " << i.second->relPath() << endl;
+            logger() << i.first->relPath() << " ~> " << i.second->relPath() << endl;
         }
-        cerr << endl;
+        logger() << endl;
     }
 }
 
 void Dpt::safeSyncAllFiles(DryRunFlag dryrun)
 {
-    {   
-        m_messager("Creating Backup...");
-        /* 
-            create presync checkpoint 
-                this must be done before the try block
-                because otherwise if error happens git reset will cause 
-                user lose data!
-        */
-        git("add --all");
-        string status = git("status");
-        std::replace(status.begin(),status.end(), '\'', '\"');
-        git("commit -m '<pre-sync checkpoint>\n\n" + status + "'");
-    }
-    try {
+    {
         m_messager("Computing Differences...");
         dbOpen();
         updateLocalTree();
@@ -1100,51 +1087,66 @@ void Dpt::safeSyncAllFiles(DryRunFlag dryrun)
             && m_prepared_overwrite_from_dpt.empty()
             && m_prepared_overwrite_to_dpt.empty())
         {
-            cerr << "All files are identical." << endl;
+            logger() << "All files are identical." << endl;
             m_messager("All Up-to-Date");
             return;
         }
         if (dryrun) {
-            cerr << "Action was aborted due to dry-run flag." << endl;
+            logger() << "Action was aborted due to dry-run flag." << endl;
             return;
         }
-        {   
-            m_messager("Creating Backup...");
-            /* backup files about to be changed on dpt */
-            git("checkout dpt");
-            git("merge master -X theirs -m '<pre-dpt-backup checkpoint>\n\n merge master into dpt branch'");
-            for (auto const& dpt : m_prepared_dpt_delete) {
-                overwriteFromDpt(dpt->path(), m_sync_dir / dpt->relPath());
-            }
-            for (auto const& local : m_prepared_overwrite_to_dpt) {
-                path dptpath = "Document" / local->relPath();
-                auto dpt = m_dpt_path_nodes.find(dptpath.string());
-                if (dpt != m_dpt_path_nodes.end()) {
-                    overwriteFromDpt(dpt->second->path(), local->path());
+    }
+    {   
+        m_messager("Creating Backup...");
+        /* 
+            create presync checkpoint 
+                this must be done before the try block
+                because otherwise if error happens git reset will cause 
+                user lose data!
+        */
+        git("add --all");
+        string status = git("status");
+        std::replace(status.begin(),status.end(), '\'', '\"');
+        git("commit --allow-empty -m '<pre-sync checkpoint>\n\n" + status + "'");
+    }
+    try {
+            {   
+                m_messager("Creating Backup...");
+                /* backup files about to be changed on dpt */
+                git("checkout dpt");
+                git("merge master -X theirs -m '<pre-dpt-backup checkpoint>\n\n merge master into dpt branch'");
+                for (auto const& dpt : m_prepared_dpt_delete) {
+                    overwriteFromDpt(dpt->path(), m_sync_dir / dpt->relPath());
                 }
+                for (auto const& local : m_prepared_overwrite_to_dpt) {
+                    path dptpath = "Document" / local->relPath();
+                    auto dpt = m_dpt_path_nodes.find(dptpath.string());
+                    if (dpt != m_dpt_path_nodes.end()) {
+                        overwriteFromDpt(dpt->second->path(), local->path());
+                    }
+                }
+                // TO-do: handle move
+                git("add --all");
+                string status = git("status");
+                std::replace(status.begin(),status.end(), '\'', '\"');
+                git("commit --allow-empty -m '<post-dpt-backup checkpoint>\n\n" + status + "'");
             }
-            // TO-do: handle move
-            git("add --all");
-            string status = git("status");
-            std::replace(status.begin(),status.end(), '\'', '\"');
-            git("commit -m '<post-dpt-backup checkpoint>\n\n" + status + "'");
-        }
-        {   
-            m_messager("Syncing...");
-            /* start syncing */
-            git("checkout master");
-            cerr << "Syncing started. Do not disconnect!" << endl;
-            dbOpen();
-            syncAllFiles();
-            updateLocalTree();
-            updateDptTree();
-            updateRevDB();
-            dbClose(); // git checkout would invalidate db connection
-            cerr << "All files are synced." << endl;
-            m_messager("All Up-to-Date");
-        }
+            {   
+                m_messager("Syncing...");
+                /* start syncing */
+                git("checkout master");
+                logger() << "Syncing started. Do not disconnect!" << endl;
+                dbOpen();
+                syncAllFiles();
+                updateLocalTree();
+                updateDptTree();
+                updateRevDB();
+                dbClose(); // git checkout would invalidate db connection
+                logger() << "All files are synced." << endl;
+                m_messager("All Up-to-Date");
+            }
     } catch (...) {
-        cerr << "An error happend during syncing, changes will be reverted." << endl;
+        logger() << "An error happend during syncing, changes will be reverted." << endl;
         m_messager("Sync Failed");
         git("checkout master");
         git("add --all");
@@ -1155,20 +1157,20 @@ void Dpt::safeSyncAllFiles(DryRunFlag dryrun)
         git("add --all");
         string status = git("status");
         std::replace(status.begin(),status.end(), '\'', '\"');
-        git("commit -m '<post-sync checkpoint>\n\n" + status + "'");
+        git("commit --allow-empty -m '<post-sync checkpoint>\n\n" + status + "'");
     }
 }
 
 void Dpt::setPrivateKeyPath(path const& key) {
     #if DEBUG_AUTH
-    cerr << "using private key: " << key << endl;
+    logger() << "using private key: " << key << endl;
     #endif
     m_private_key_path = key;
 }
 
 void Dpt::setClientIdPath(path const& id) {
     #if DEBUG_AUTH
-    cerr << "using client id: " << id << endl;
+    logger() << "using client id: " << id << endl;
     #endif
     m_client_id_path = id;
 }
@@ -1222,12 +1224,12 @@ string Dpt::git(string const& command) const
     std::string result;
     string git_cmd = "git " + command;
     #if DEBUG_GIT
-        cerr << git_cmd << endl;
+        logger() << git_cmd << endl;
     #endif
     string shell_cmd = "cd " + m_sync_dir.string() + " && " + git_cmd + " 2>&1 ";
     FILE* pipe = popen(shell_cmd.c_str(), "r");
     if (!pipe) {
-        std::cerr << "Couldn't start command." << std::endl;
+        logger() << "Couldn't start command." << endl;
         return 0;
     }
     while (fgets(buffer.data(), 128, pipe) != NULL) {
@@ -1268,7 +1270,14 @@ void Dpt::setupSyncDir()
     
 }
 
-void Dpt::setMessager(std::function<void(string)> me) 
+void Dpt::setMessager(std::function<void(string const&)> me) 
 {
     m_messager = me;
 }
+
+void Dpt::setLogger(ostream& log)
+{
+    m_logger = &log;
+}
+
+ostream& Dpt::logger() const { return *m_logger; }
