@@ -10,7 +10,6 @@
 #include <iostream>
 #include "dtree.h"
 #include "revdb.h"
-#include "logger.h"
 
 namespace dpt {
 
@@ -57,6 +56,7 @@ namespace dpt {
             path m_sync_dir;
             path m_client_id_path;
             path m_private_key_path;
+            path m_git_path;
             RevDB m_rev_db;
             unordered_map<string,shared_ptr<DNode>> m_dpt_path_nodes;
             unordered_map<string,shared_ptr<LNode>> m_local_path_nodes;
@@ -128,6 +128,7 @@ namespace dpt {
             void safeSyncAllFiles(DryRunFlag dryrun = NormalRun);
             void setMessager(std::function<void(string const&)>);
             void setLogger(ostream&);
+            void setGitPath(path const& p);
     };
 
     class HttpSigner {

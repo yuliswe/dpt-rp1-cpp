@@ -1222,7 +1222,12 @@ string Dpt::git(string const& command) const
     }
     std::array<char, 128> buffer;
     std::string result;
-    string git_cmd = "git " + command;
+    string git_cmd;
+    if (m_git_path.empty()) {
+        git_cmd = "git " + command;
+    } else {
+        git_cmd = "\"" + m_git_path.string() + "\" " + command;
+    }
     #if DEBUG_GIT
         logger() << git_cmd << endl;
     #endif
@@ -1237,9 +1242,15 @@ string Dpt::git(string const& command) const
     }
     pclose(pipe);
     #if DEBUG_GIT
-        std::cout << result << std::endl;
+        logger() << result << std::endl;
     #endif
     return result;
+}
+
+void Dpt::setGitPath(path const& p)
+{
+    m_git_path = p;
+    git("--version");
 }
 
 Dpt::~Dpt()
