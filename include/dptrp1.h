@@ -120,7 +120,8 @@ namespace dpt {
             shared_ptr<DptRequest> httpRequest(string url) const;
             shared_ptr<DptResponse> sendRequest(shared_ptr<DptRequest> request) const;
             string readResponse(shared_ptr<DptResponse> response) const;
-            void dptOpenDocument(string document_id) const;
+            void dptOpenDocument(path const& dpt);
+            void dptQuickUploadAndOpen(path const& local);
             vector<path> dptOpenDocuments() const;
             void syncTime() const;
             path syncDir() const;

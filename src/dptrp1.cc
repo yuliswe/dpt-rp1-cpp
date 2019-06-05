@@ -65,9 +65,9 @@ void Dpt::authenticate()
     assert(! m_private_key_path.empty() && "don't forget to set private key");
     assert(! m_client_id_path.empty() && "don't forget to set client id");
 
-    m_messager("Connecting to DPT-RP1...");
-
     try {
+        m_messager("Connecting to DPT-RP1...");
+        m_cookies.clear();
         
         string client_id;
         ifstream inf(m_client_id_path.string(), std::ios_base::in);
@@ -87,7 +87,6 @@ void Dpt::authenticate()
         write_json(buf, data, false);
         string json = buf.str();
         /* send request */
-        m_cookies.clear();
         auto request = httpRequest("/auth");
         request->setMethod("PUT");
         request->setData((unsigned char*)json.c_str(), json.length());
@@ -219,8 +218,9 @@ string Dpt::baseUrl() const
     return "https://" + hostname() + ":" + std::to_string(port());
 }
 
-void Dpt::dptOpenDocument(string document_id) const
+void Dpt::dptOpenDocument(path const& p)
 {
+    string const document_id = m_dpt_path_nodes[p.string()]->id();
     Json ptree;
     ptree.put("document_id", document_id);
     sendJson("PUT", "/viewer/controls/open2", ptree);
@@ -891,16 +891,22 @@ void Dpt::overwriteToDpt(path const& source, path const& dest) {
             js.put("file_name", n_dest_path.filename().string());
             Json resp = sendJson("POST", "/documents2", js);
             string file_id = resp.get<string>("document_id");
+            auto new_node = make_shared<DNode>();
+            new_node->setPath(n_dest_path.string());
+            new_node->setFilename(n_dest_path.filename().string());
+            new_node->setId(file_id);
+            new_node->setIsDir(false);
+            m_dpt_path_nodes[n_dest_path.string()] = new_node;
             #if DEBUG_FILE_IO
             logger() << "writing file: " << n_dest_path << endl;
             #endif
             ifstream inf(n.string(), std::ios_base::in|std::ios_base::binary);
             /* get size of file */
-            inf.seekg(0,inf.end);
+            inf.seekg(0, inf.end);
             size_t size = inf.tellg();
             inf.seekg(0);
-            char buffer[size];
-            inf.read(buffer, size);
+            vector<char> buffer(size);
+            inf.read(buffer.data(), size);
             /* send requet */
             auto request = httpRequest("/documents/" + file_id + "/file");
             request->setMethod("PUT");
@@ -909,14 +915,14 @@ void Dpt::overwriteToDpt(path const& source, path const& dest) {
             ss << "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\nContent-Disposition: form-data; name=\"file\"; filename=\"" 
                << n_dest_path.filename().string() 
                << "\"\r\nContent-Type: application/pdf\r\n\r\n";
-            ss.write(buffer, size);
+            ss.write(buffer.data(), size);
             ss << "\r\n------WebKitFormBoundary7MA4YWxkTrZu0gW--\r\n";
-            ss.seekp(0, ios::end);
-            stringstream::pos_type offset = ss.tellp();
+            ss.seekp(0, ss.end);
+            size_t offset = ss.tellp();
             ss.seekp(0);
-            char message[static_cast<size_t>(offset)];
-            ss.read(message, offset);
-            request->setData(reinterpret_cast<unsigned char const*>(message), offset);
+            vector<char> message(offset);
+            ss.read(message.data(), offset);
+            request->setData(reinterpret_cast<unsigned char const*>(message.data()), offset);
             logger() << readResponse(sendRequest(request)) << endl;
         }
     }
@@ -1292,3 +1298,26 @@ void Dpt::setLogger(ostream& log)
 }
 
 ostream& Dpt::logger() const { return *m_logger; }
+
+void Dpt::dptQuickUploadAndOpen(path const& local)
+{
+    // TODO: make this code faster
+    updateDptTree();
+
+    if (m_dpt_path_nodes.find("Document/Received") == m_dpt_path_nodes.end()) {
+
+        Json js;
+        js.put("parent_folder_id", "root");
+        js.put("folder_name", "Received");
+        Json resp = sendJson("POST", "/folders2", js);
+        string new_id = resp.get<string>("folder_id");
+        updateDptTree();
+
+    }
+    path p = "Document/Received" / local.filename();
+
+    m_messager("Uploading " + local.filename().string() + "...");
+    overwriteToDpt(local, p);
+    dptOpenDocument(p);
+    m_messager("All Up-to-Date");
+}
