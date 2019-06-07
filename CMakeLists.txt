@@ -52,7 +52,7 @@ target_compile_definitions(
         DEBUG
         DEBUG_AUTH
         DEBUG_CONFLICT
-        DEBUG_GIT
+        # DEBUG_GIT
         # DEBUG_REQUEST
         # DEBUG_DEBUG_FILE_IO
 )

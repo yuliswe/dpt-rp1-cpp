@@ -1,3 +1,6 @@
+#ifndef dtree_h
+#define dtree_h
+
 #include <memory>
 #include <vector>
 #include <chrono>
@@ -58,3 +61,5 @@ namespace dpt {
                        vector<pair<shared_ptr<DNode>,shared_ptr<DNode>>>& both);
 };
 
+
+#endif

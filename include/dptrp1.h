@@ -1,3 +1,6 @@
+#ifndef dptrp1_h
+#define dptrp1_h
+
 #include <string>
 #include <map>
 #include <vector>
@@ -44,6 +47,14 @@ namespace dpt {
             string body() const;
     };
 
+    struct GitCommit {
+        string commit;
+        std::tm time;
+        string iso8601_time;
+        string message;
+        string title;
+    };
+
     class Dpt
     {
         private:
@@ -58,6 +69,7 @@ namespace dpt {
             path m_private_key_path;
             path m_git_path;
             RevDB m_rev_db;
+            vector<shared_ptr<GitCommit>> m_git_commits;
             unordered_map<string,shared_ptr<DNode>> m_dpt_path_nodes;
             unordered_map<string,shared_ptr<LNode>> m_local_path_nodes;
             unordered_map<string,shared_ptr<DNode>> m_dpt_revision_nodes;
@@ -130,6 +142,10 @@ namespace dpt {
             void setMessager(std::function<void(string const&)>);
             void setLogger(ostream&);
             void setGitPath(path const& p);
+            void initSyncDir();
+            void updateGitCommits();
+            void extractGitCommit(string const& commit, path const& dest);
+            vector<shared_ptr<GitCommit>> listGitCommits(size_t limit = 100) const;
     };
 
     class HttpSigner {
@@ -144,3 +160,5 @@ namespace dpt {
     bool syncable(path const& path);
 
 };
+
+#endif

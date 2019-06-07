@@ -459,10 +459,48 @@ void Dpt::copyBetweenDpt(path const& source, path const& dest)
     }
 }
 
-void Dpt::copyBetweenLocal(path const& from, path const& to)
+void Dpt::copyBetweenLocal(path const& source, path const& dest)
 {
-    boost::system::error_code ec;
-    boost::filesystem::copy(from, to, ec);
+    // #if DEBUG_FILE_IO
+    logger() << "copying local~>local: " << source << " ~> " << dest << endl;
+    // #endif
+    /* BFS */
+    std::queue<path> que;
+    que.push(source);
+    while (! que.empty()) {
+        path const n = que.front();
+        que.pop();
+        /* compute dest path */
+        auto p = n.begin();
+        for (auto const& _ : source) {
+            (void)_;
+            p++; // skip source as prefix of n
+        }
+        // then make n_dest = dest + the rest of source
+        path n_dest = dest;
+        while (p != n.end()) {
+            n_dest /= *p;
+            p++;
+        }
+        if (is_directory(n)) {
+            for (auto const& i : directory_iterator(n)) {
+                que.push(i.path());
+            }
+            /* process directory */
+            // #if DEBUG_FILE_IO
+            logger() << "creating local directory: " << n_dest << endl;
+            // #endif
+            boost::system::error_code error;
+            boost::filesystem::copy_directory(n, n_dest, error);
+        } else {
+            /* process file */
+            // #if DEBUG_FILE_IO
+            logger() << "copying local file: " << n_dest << endl;
+            // #endif 
+            boost::system::error_code error;
+            boost::filesystem::copy_file(n, n_dest, error);
+        }
+    }
 }
 
 vector<path> Dpt::dptOpenDocuments() const
@@ -1256,7 +1294,6 @@ string Dpt::git(string const& command) const
 void Dpt::setGitPath(path const& p)
 {
     m_git_path = p;
-    git("--version");
 }
 
 Dpt::~Dpt()
@@ -1301,23 +1338,87 @@ ostream& Dpt::logger() const { return *m_logger; }
 
 void Dpt::dptQuickUploadAndOpen(path const& local)
 {
-    // TODO: make this code faster
-    updateDptTree();
-
-    if (m_dpt_path_nodes.find("Document/Received") == m_dpt_path_nodes.end()) {
-
-        Json js;
-        js.put("parent_folder_id", "root");
-        js.put("folder_name", "Received");
-        Json resp = sendJson("POST", "/folders2", js);
-        string new_id = resp.get<string>("folder_id");
+    try {
+        // TODO: make this code faster
         updateDptTree();
-
+        if (m_dpt_path_nodes.find("Document/Received") == m_dpt_path_nodes.end()) {
+            Json js;
+            js.put("parent_folder_id", "root");
+            js.put("folder_name", "Received");
+            Json resp = sendJson("POST", "/folders2", js);
+            string new_id = resp.get<string>("folder_id");
+            updateDptTree();
+        }
+        path p = "Document/Received" / local.filename();
+        if (m_dpt_path_nodes.find(p.string()) == m_dpt_path_nodes.end()) {    
+            m_messager("Uploading " + local.filename().string() + "...");
+            overwriteToDpt(local, p);
+        } 
+        m_messager("Opening " + local.filename().string() + "...");
+        dptOpenDocument(p);
+        m_messager("All Up-to-Date");
+    } catch(...) {
+        m_messager("Failed to Upload " + local.filename().string());
+        throw;
     }
-    path p = "Document/Received" / local.filename();
+}
 
-    m_messager("Uploading " + local.filename().string() + "...");
-    overwriteToDpt(local, p);
-    dptOpenDocument(p);
-    m_messager("All Up-to-Date");
+vector<shared_ptr<GitCommit>> Dpt::listGitCommits(size_t limit) const
+{
+    size_t lim = min(limit, m_git_commits.size());
+    return vector<shared_ptr<GitCommit>>(m_git_commits.begin(), m_git_commits.begin() + lim);
+}
+
+void Dpt::updateGitCommits()
+{
+    m_git_commits.clear();
+    string out = git("--no-pager log --all --format=\"====================== commit begins%n%h%n%cI%n%B%n====================== commit ends\"");
+    /* parse output */
+    istringstream ss(out);
+    string ln;
+    shared_ptr<GitCommit> commit;
+    ostringstream body;
+    while(std::getline(ss,ln)) {
+        if (ln == "====================== commit begins") {
+            commit = make_shared<GitCommit>();
+            /* get commit hash */
+            std::getline(ss,ln);
+            commit->commit = ln;
+            /* get commit time: eg, "2019-05-30T10:04:11" */
+            std::getline(ss,ln);
+            commit->iso8601_time = ln;
+            stringstream(ln) >> std::get_time(&commit->time, "%Y-%m-%dT%T");
+            /* get title */
+            std::getline(ss,ln);
+            commit->title = ln;
+            body << ln << endl;
+        } else if (ln == "====================== commit ends") {
+            commit->message = body.str();
+            m_git_commits.push_back(commit);
+            body.clear();
+            body.str("");
+        } else {
+            /* commit message body */
+            body << ln << endl;
+        }
+    }
+}
+
+void Dpt::extractGitCommit(string const& commit, path const& dest) 
+{
+    assert(! m_sync_dir.empty() && "don't forget to set sync dir");
+    {
+        git("add --all");
+        string status = git("status");
+        std::replace(status.begin(),status.end(), '\'', '\"');
+        git("commit --allow-empty -m '<pre-extraction-sync checkpoint>\n\n" + status + "'");
+    }
+    try {
+        git("checkout " + commit);
+        copyBetweenLocal(m_sync_dir, dest);
+    } catch (...) {
+        git("checkout master");
+        throw;    
+    }
+    git("checkout master");
 }

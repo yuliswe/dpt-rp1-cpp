@@ -1,3 +1,6 @@
+#ifndef revdb_h
+#define revdb_h
+
 #include <string>
 #include <boost/filesystem.hpp>
 #include <sqlite3.h>
@@ -29,3 +32,5 @@ namespace dpt {
 
     string md5(path const& file);
 };
+
+#endif
