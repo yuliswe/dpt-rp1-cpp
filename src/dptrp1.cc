@@ -1309,6 +1309,8 @@ void Dpt::setupSyncDir()
         git("init");
         git("branch dpt");
     }
+    /* resolve path issue with non-ascii filename */
+    git("config core.quotepath false"); 
     path git_ignore = m_sync_dir / ".gitignore";
     if (! filesystem::exists(git_ignore)) {
         filesystem::copy_file("gitignore", git_ignore);
@@ -1372,7 +1374,7 @@ vector<shared_ptr<GitCommit>> Dpt::listGitCommits(size_t limit) const
 void Dpt::updateGitCommits()
 {
     m_git_commits.clear();
-    string out = git("--no-pager log --all --format=\"====================== commit begins%n%h%n%cI%n%B%n====================== commit ends\"");
+    string out = git("--no-pager log --all --format=\"====================== commit begins%n%h%n%cI%n%B====================== commit ends\"");
     /* parse output */
     istringstream ss(out);
     string ln;
