@@ -972,8 +972,8 @@ void Dpt::deleteFromLocal(path const& file) {
 
 void Dpt::syncAllFiles()
 {
-    syncTime();
     m_messager("Syncing Device Time...");
+    syncTime();
     for (auto const& i : m_prepared_dpt_delete) {
         m_messager("Syncing " + i->filename()+ "...");
         deleteFromDpt(i->path());
