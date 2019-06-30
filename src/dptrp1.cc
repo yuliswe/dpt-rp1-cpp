@@ -922,20 +922,29 @@ void Dpt::overwriteToDpt(path const& source, path const& dest) {
             new_node->setId(new_id);
         } else {
             /* process file */
-            #if DEBUG_FILE_IO
-            logger() << "creating file: " << n_dest_path << endl;
-            #endif
-            Json js;
-            js.put("parent_folder_id", m_dpt_path_nodes[n_dest_path.parent_path().string()]->id());
-            js.put("file_name", n_dest_path.filename().string());
-            Json resp = sendJson("POST", "/documents2", js);
-            string file_id = resp.get<string>("document_id");
-            auto new_node = make_shared<DNode>();
-            new_node->setPath(n_dest_path.string());
-            new_node->setFilename(n_dest_path.filename().string());
-            new_node->setId(file_id);
-            new_node->setIsDir(false);
-            m_dpt_path_nodes[n_dest_path.string()] = new_node;
+            string file_id;
+            // if file exists
+            if (m_dpt_path_nodes.find(n_dest_path.string()) == m_dpt_path_nodes.end()) {
+                #if DEBUG_FILE_IO
+                    logger() << "creating file dpt: " << n_dest_path << endl;
+                #endif
+                Json js;
+                js.put("parent_folder_id", m_dpt_path_nodes[n_dest_path.parent_path().string()]->id());
+                js.put("file_name", n_dest_path.filename().string());
+                Json resp = sendJson("POST", "/documents2", js);
+                file_id = resp.get<string>("document_id");
+                auto new_node = make_shared<DNode>();
+                new_node->setPath(n_dest_path.string());
+                new_node->setFilename(n_dest_path.filename().string());
+                new_node->setId(file_id);
+                new_node->setIsDir(false);
+                m_dpt_path_nodes[n_dest_path.string()] = new_node;
+            } else {
+                #if DEBUG_FILE_IO
+                    logger() << "file exists on dpt, skipped creation: " << n_dest_path << endl;
+                #endif 
+                file_id = m_dpt_path_nodes[n_dest_path.string()]->id();
+            }
             #if DEBUG_FILE_IO
             logger() << "writing file: " << n_dest_path << endl;
             #endif
