@@ -1,9 +1,9 @@
-#include <dptrp1.h>
+#include <dptrp1/dptrp1.h>
 #include <boost/property_tree/json_parser.hpp>
-#include <boost/asio.hpp>
 #include <NFHTTP/NFHTTP.h>
 #include <sstream>
 #include <iostream>
+#include <boost/asio/error.hpp>
 #include <openssl/sha.h>
 #include <openssl/rsa.h>
 #include <openssl/pem.h>
@@ -11,21 +11,19 @@
 #include <openssl/obj_mac.h>
 #include <ctime>
 #include <iomanip>
-#include <boost/log/trivial.hpp>
+#include <boost/asio.hpp>
 #include <boost/filesystem.hpp>
 #include <algorithm>
 #include <memory>
 #include <queue>
 #include <unordered_set>
+#include <git2.h>
 
 using namespace dpt;
 using namespace std;
 
 using std::shared_ptr;
 
-using boost::asio::ip::address;
-using boost::asio::io_service;
-using boost::asio::io_context;
 using boost::filesystem::path;
 using boost::filesystem::is_directory;
 using boost::filesystem::create_directory;
@@ -33,26 +31,31 @@ using boost::filesystem::is_regular_file;
 using boost::filesystem::directory_iterator;
 using boost::filesystem::last_write_time;
 using boost::filesystem::last_write_time;
-using endpoint = boost::asio::ip::tcp::endpoint;
 
 using nativeformat::http::Request;
 using nativeformat::http::Response;
 
-/*
-Dpt::Dpt(unsigned port)
+bool Dpt::resolveHost(boost::asio::ip::address* addr) const
 {
-    using resolver = boost::asio::ip::tcp::resolver;
-    m_port = port;
-    io_service svc;
-    io_context ctx;
-    resolver res(ctx);
-    resolver::query query(hostname(), "http");
-    resolver::iterator iter = res.resolve(query);
-    resolver::iterator end;
-    endpoint ep = *iter;
-    m_ip = ep.address();
+    try {
+        boost::asio::io_service svc;
+        boost::asio::io_context ctx;
+        using resolver = boost::asio::ip::tcp::resolver;
+        resolver res(ctx);
+        resolver::query query(hostname(), to_string(port()));
+        resolver::iterator iter = res.resolve(query);
+        resolver::iterator end;
+        if (end == iter) {
+            return false;
+        }
+        if (addr) {
+            *addr = iter->endpoint().address();
+        }
+        return true;
+    } catch (boost::wrapexcept<boost::system::system_error> err) {
+        return false;
+    }
 }
-*/
 
 // Dpt::Dpt(address const& ip, unsigned port)
 // {
@@ -66,23 +69,32 @@ void Dpt::authenticate()
     assert(! m_client_id_path.empty() && "don't forget to set client id");
 
     try {
-        m_messager("Connecting to DPT-RP1...");
+        m_messager("Authenticating...");
         m_cookies.clear();
         
         string client_id;
         ifstream inf(m_client_id_path.string(), std::ios_base::in);
         inf >> client_id;
+        #if DEBUG_AUTH
+            logger() << "using client_id: " << client_id << endl;
+        #endif 
 
         using boost::property_tree::ptree;
         using boost::property_tree::write_json;
         /* prepare signature */
         HttpSigner signer(m_private_key_path);
         string nonce = getNonce(client_id);
+        #if DEBUG_AUTH
+            logger() << "received nonce: " << nonce << endl;
+        #endif 
         string nonce_signed = signer.sign(nonce);
         /* write data to send */
         ptree data;
         data.put("client_id", client_id);
         data.put("nonce_signed", nonce_signed);
+        #if DEBUG_AUTH
+            logger() << "using nonce_signed: " << nonce_signed << endl;
+        #endif 
         ostringstream buf;
         write_json(buf, data, false);
         string json = buf.str();
@@ -106,11 +118,12 @@ void Dpt::authenticate()
     }
 }
 
-unsigned Dpt::port() const { return m_port; }
-string Dpt::hostname() const { return m_hostname; }
+unsigned Dpt::port() const noexcept { return m_port; }
+string Dpt::hostname() const noexcept { return m_hostname; }
 
 string HttpSigner::sign(string nonce)
 {
+    int error = 0;
     /* get rsa key */
     RSA* rsa = nullptr;
     FILE* fp = fopen(m_private_key_path.c_str(), "r");
@@ -123,21 +136,20 @@ string HttpSigner::sign(string nonce)
     EVP_PKEY_set1_RSA(evp_pkey, rsa);
     EVP_MD const* md = EVP_sha256();
     EVP_PKEY_CTX* pkey_ctx;
-    assert(EVP_DigestSignInit(mdctx, &pkey_ctx, md, NULL, evp_pkey));
-    assert(EVP_DigestSignUpdate(mdctx, nonce.c_str(), nonce.length()));
-    size_t siglen = 256;
-    unsigned char sig[siglen];
-    assert(EVP_DigestSignFinal(mdctx, sig, &siglen));
+    error = EVP_DigestSignInit(mdctx, &pkey_ctx, md, NULL, evp_pkey);
+    error = EVP_DigestSignUpdate(mdctx, nonce.c_str(), nonce.length());
+    unsigned char sig[256];
+    size_t siglen;
+    error = EVP_DigestSignFinal(mdctx, sig, &siglen);
     assert(sig);
     assert(siglen == 256);
     EVP_PKEY_free(evp_pkey);
     EVP_MD_CTX_destroy(mdctx);
     /* conver to base 64 string */
     unsigned char encoded[512];
-    assert(EVP_EncodeBlock(encoded, sig, siglen));
-    size_t encode_len = strlen((char*)encoded);
-    assert(encode_len > 0);
-    return string((char*)encoded);
+    error = EVP_EncodeBlock(encoded, sig, siglen);
+    assert(strlen((char*)encoded) > 0);
+    return string(reinterpret_cast<char*>(encoded));
 }
 
 HttpSigner::HttpSigner(path const& private_key_path)
@@ -145,7 +157,7 @@ HttpSigner::HttpSigner(path const& private_key_path)
     m_private_key_path = private_key_path;
 }
 
-shared_ptr<DptRequest> Dpt::httpRequest(string url) const
+shared_ptr<DptRequest> Dpt::httpRequest(string const& url) const
 {
     auto request = nativeformat::http::createRequest(baseUrl() + url, std::unordered_map<std::string, std::string>());
     if (m_cookies.find("Credentials") != m_cookies.end()) {
@@ -1156,19 +1168,22 @@ void Dpt::safeSyncAllFiles(DryRunFlag dryrun)
             create presync checkpoint 
                 this must be done before the try block
                 because otherwise if error happens git reset will cause 
-                user lose data!
+                user to lose data!
         */
-        git("add --all");
-        string status = git("status");
-        std::replace(status.begin(),status.end(), '\'', '\"');
-        git("commit --allow-empty -m '<pre-sync checkpoint>\n\n" + status + "'");
+        m_git->checkout("master");
+        m_git->addAll();
+        string status = m_git->status();
+        m_git->commit("<local pre-sync checkpoint>\n\n" + status);
     }
     try {
             {   
                 m_messager("Creating Backup...");
                 /* backup files about to be changed on dpt */
-                git("checkout dpt");
-                git("merge master -X theirs -m '<pre-dpt-backup checkpoint>\n\n merge master into dpt branch'");
+                gptr<git_status_list> stats;
+                gptr<git_reference> head;
+                m_git->status(head, stats);
+                m_git->branch("dpt");
+                m_git->checkout("dpt");
                 for (auto const& dpt : m_prepared_dpt_delete) {
                     overwriteFromDpt(dpt->path(), m_sync_dir / dpt->relPath());
                 }
@@ -1180,15 +1195,16 @@ void Dpt::safeSyncAllFiles(DryRunFlag dryrun)
                     }
                 }
                 // TO-do: handle move
-                git("add --all");
-                string status = git("status");
+                m_git->addAll();
+                string status = m_git->status();
                 std::replace(status.begin(),status.end(), '\'', '\"');
-                git("commit --allow-empty -m '<post-dpt-backup checkpoint>\n\n" + status + "'");
+                m_git->commit("<dpt pre-sync checkpoint>\n\n" + status);
+                m_git->tag("dpt_" + string(git_oid_tostr_s(git_reference_target(head))).substr(0,7));
             }
             {   
                 m_messager("Syncing...");
                 /* start syncing */
-                git("checkout master");
+                m_git->checkout("master");
                 logger() << "Syncing started. Do not disconnect!" << endl;
                 dbOpen();
                 syncAllFiles();
@@ -1202,16 +1218,15 @@ void Dpt::safeSyncAllFiles(DryRunFlag dryrun)
     } catch (...) {
         logger() << "An error happend during syncing, changes will be reverted." << endl;
         m_messager("Sync Failed");
-        git("checkout master");
-        git("add --all");
-        git("reset --hard");
+        m_git->checkout("master");
+        m_git->addAll();
+        m_git->resetHard();
         throw;
     }
     {
-        git("add --all");
-        string status = git("status");
-        std::replace(status.begin(),status.end(), '\'', '\"');
-        git("commit --allow-empty -m '<post-sync checkpoint>\n\n" + status + "'");
+        m_git->addAll();
+        string status = m_git->status();
+        m_git->commit("<local post-sync checkpoint>\n\n" + status);
     }
 }
 
@@ -1229,10 +1244,7 @@ void Dpt::setClientIdPath(path const& id) {
     m_client_id_path = id;
 }
 
-void Dpt::setPort(unsigned port)
-{
-    m_port = port;
-}
+void Dpt::setPort(unsigned port) noexcept { m_port = port; }
 
 void Dpt::dbOpen()
 {
@@ -1252,6 +1264,7 @@ void Dpt::dbClose()
 
 string Dpt::git(string const& command) const
 {
+    cerr << "deprecated warning: git(\"" << command << "\") called" << endl;
     assert(! m_sync_dir.empty() && "don't forget to set sync dir");
     if (command == "add --all") {
         /* git does not track emtpy dirs, a dirty trick is needed */
@@ -1301,11 +1314,6 @@ string Dpt::git(string const& command) const
     return result;
 }
 
-void Dpt::setGitPath(path const& p)
-{
-    m_git_path = p;
-}
-
 Dpt::~Dpt()
 {
     dbClose();
@@ -1315,12 +1323,8 @@ void Dpt::setupSyncDir()
 {
     using namespace boost;
     assert(! m_sync_dir.empty() && "don't forget to set sync dir");
-    if (! filesystem::exists(m_sync_dir / ".git")) {
-        git("init");
-        git("branch dpt");
-    }
     /* resolve path issue with non-ascii filename */
-    git("config core.quotepath false"); 
+    // git("config core.quotepath false"); 
     path git_ignore = m_sync_dir / ".gitignore";
     if (! filesystem::exists(git_ignore)) {
         filesystem::copy_file("gitignore", git_ignore);
@@ -1333,15 +1337,15 @@ void Dpt::setupSyncDir()
     if (! filesystem::exists(rev_db)) {
         filesystem::copy_file("rev_db", rev_db);
     }
-    
+    m_git = make_shared<Git>(m_sync_dir);
 }
 
-void Dpt::setMessager(std::function<void(string const&)> me) 
+void Dpt::setMessager(std::function<void(string const&)> me) noexcept
 {
     m_messager = me;
 }
 
-void Dpt::setLogger(ostream& log)
+void Dpt::setLogger(ostream& log) noexcept
 {
     m_logger = &log;
 }
@@ -1381,38 +1385,30 @@ vector<shared_ptr<GitCommit>> Dpt::listGitCommits(size_t limit) const
     return vector<shared_ptr<GitCommit>>(m_git_commits.begin(), m_git_commits.begin() + lim);
 }
 
-void Dpt::updateGitCommits()
+void Dpt::updateGitCommits() 
 {
+    assert(! m_sync_dir.empty() && "don't forget to set sync dir");
     m_git_commits.clear();
-    string out = git("--no-pager log --all --format=\"====================== commit begins%n%h%n%cI%n%B====================== commit ends\"");
-    /* parse output */
-    istringstream ss(out);
-    string ln;
-    shared_ptr<GitCommit> commit;
-    ostringstream body;
-    while(std::getline(ss,ln)) {
-        if (ln == "====================== commit begins") {
-            commit = make_shared<GitCommit>();
-            /* get commit hash */
-            std::getline(ss,ln);
-            commit->commit = ln;
-            /* get commit time: eg, "2019-05-30T10:04:11" */
-            std::getline(ss,ln);
-            commit->iso8601_time = ln;
-            stringstream(ln) >> std::get_time(&commit->time, "%Y-%m-%dT%T");
-            /* get title */
-            std::getline(ss,ln);
-            commit->title = ln;
-            body << ln << endl;
-        } else if (ln == "====================== commit ends") {
-            commit->message = body.str();
-            m_git_commits.push_back(commit);
-            body.clear();
-            body.str("");
+    auto&& list = m_git->history(100);
+    cerr << list.size() << endl;
+    for (auto& gptr_commit : list) 
+    {
+        shared_ptr<GitCommit> commit = make_shared<GitCommit>();
+        git_oid const* oid = git_commit_id(gptr_commit);
+        commit->commit = git_oid_tostr_s(oid);
+        commit->message = git_commit_message(gptr_commit);
+        size_t newline_pos = commit->message.find('\n', 0);
+        if (newline_pos == string::npos) {
+            commit->title = commit->message;
         } else {
-            /* commit message body */
-            body << ln << endl;
+            commit->title = commit->message.substr(0,newline_pos);
         }
+        time_t commit_time = git_commit_time(gptr_commit);
+        char time_str[26];
+        commit->time = *std::gmtime(&commit_time);
+        std::strftime(time_str, sizeof(time_str), "%Y-%m-%dT%T+00:00", &commit->time);
+        commit->iso8601_time = std::move(time_str);
+        m_git_commits.push_back(commit);
     }
 }
 
@@ -1420,17 +1416,24 @@ void Dpt::extractGitCommit(string const& commit, path const& dest)
 {
     assert(! m_sync_dir.empty() && "don't forget to set sync dir");
     {
-        git("add --all");
-        string status = git("status");
-        std::replace(status.begin(),status.end(), '\'', '\"');
-        git("commit --allow-empty -m '<pre-extraction-sync checkpoint>\n\n" + status + "'");
+        m_git->addAll();
+        string status = m_git->status();
+        m_git->commit("<pre-extraction-sync checkpoint>\n\n" + status);
     }
     try {
-        git("checkout " + commit);
+        m_git->checkout(commit);
         copyBetweenLocal(m_sync_dir, dest);
     } catch (...) {
-        git("checkout master");
+        m_git->checkout("master");
         throw;    
     }
-    git("checkout master");
+    m_git->checkout("master");
+}
+
+ostream& dpt::operator<<(ostream& out, GitCommit& commit)
+{
+    return out << commit.commit << endl
+               << commit.iso8601_time << endl 
+               << commit.title << endl
+               << commit.message << endl;
 }
