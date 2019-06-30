@@ -627,8 +627,9 @@ void Dpt::computeSyncFiles()
         #endif
         vector<string> db_row = m_rev_db.getByLocalRev(local->rev());
         if (db_row.empty()) {
-            /* db_row is empty can only happen for nodes in m_modified_nodes */
-            assert(ld < moved_nodes_offset);
+            db_row = m_rev_db.getByDptRev(dpt->rev());
+        }
+        if (db_row.empty()) {
             /* both files are new, conflict! */
             #if DEBUG_CONFLICT
                 logger() << "both files are new, conflict." << endl;
