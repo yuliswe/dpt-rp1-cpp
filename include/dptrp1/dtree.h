@@ -29,10 +29,16 @@ namespace dpt {
             string m_id;
             string m_rev;
             bool m_is_dir = false;
+            bool m_is_note = false;
             path m_path;
             rpath m_rel_path;
+            size_t m_filesize;
 
         public:
+            inline void setFilesize(size_t s) noexcept { m_filesize = s; }
+            inline size_t filesize() const noexcept { return m_filesize; }
+            inline bool isNote() const noexcept { return m_is_note; }
+            inline void setIsNote(bool v) noexcept { m_is_note = v; }
             time_t lastModifiedTime() const;        
             void setLastModifiedTime(time_t const& time);
             vector<shared_ptr<DNode>> children() const;

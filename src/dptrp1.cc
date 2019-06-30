@@ -178,7 +178,7 @@ shared_ptr<DptResponse> Dpt::sendRequest(shared_ptr<DptRequest> request) const
         logger() << "response: " << resp->serialise() << endl;
         logger() << "response body: "<< resp->body().substr(0,1000) << endl;
     #endif
-    if (resp->statusCode() < 200 || resp->statusCode() >= 300) {
+    if (resp->statusCode() / 100 != 2) {
         logger() << "Received error response: " << resp->serialise() << endl;
         logger() << "Request responsible for the error was: " << request->serialise() << endl;
         throw "request failure";
@@ -299,7 +299,9 @@ void Dpt::updateDptTree()
         if (self->isDir()) {
             self->setRev("folder");
         } else {
+            self->setFilesize(val.get<size_t>("file_size"));
             self->setRev(val.get<string>("file_revision"));
+            self->setIsNote(val.get<string>("document_type") == "note");
         }
         /* get relpath */
         path::iterator p = self->path().begin();
@@ -823,10 +825,41 @@ void Dpt::computeSyncFilesInNode(shared_ptr<DNode const> local, shared_ptr<DNode
     }
 }
 
+size_t Dpt::bisectDptFileBytes(shared_ptr<DNode const> node, istream& local) const
+{
+    #if DEBUG_FILE_IO
+        logger() << "bisecting file for differences..." << endl;
+    #endif
+    size_t const dpt_filesize = node->filesize();
+    size_t const local_filesize = readLocalFilesize(local);
+    /* bisection */
+    int i = 0; // start
+    int j = min(dpt_filesize, local_filesize) - 1;
+    while (i < j) {
+        int k = (i+j)/2;
+        auto const local_bytes = readLocalFileBytes(local, k, 1);
+        auto const dpt_bytes = readDptFileBytes(node, k, 1);
+        char b1 = local_bytes->operator[](0);
+        char b2 = dpt_bytes->operator[](0);
+        if (b1 == b2) {
+            if (k <= i) {
+                break;
+            }
+            i = k;
+        } else {
+            if (k >= j) {
+                break;
+            }
+            j = k;
+        }
+    }
+    return i;
+}
+
 void Dpt::overwriteFromDpt(path const& source, path const& dest)
 {
     #if DEBUG_FILE_IO
-    logger() << "copying dpt~>local: " << source << " ~> " << dest << endl;
+        logger() << "copying dpt~>local: " << source << " ~> " << dest << endl;
     #endif
     // boost::system::error_code error;
     // create_directories(dest.parent_path(), error);
@@ -855,24 +888,78 @@ void Dpt::overwriteFromDpt(path const& source, path const& dest)
             }
             /* process directory */
             #if DEBUG_FILE_IO
-            logger() << "creating directory: " << n_dest_path << endl;
+                logger() << "creating directory: " << n_dest_path << endl;
             #endif
             create_directory(n_dest_path);
         } else {
             /* process file */
-            logger() << "receiving: " << n_dest_path << endl;
-            auto request = httpRequest("/documents/" + n->id() + "/file");
-            request->setMethod("GET");
-            auto response = sendRequest(request);
+            size_t const dpt_filesize = n->filesize();
+            size_t const KB = 1024; // 1MB in bytes
+            /* if local file exists, then bisect for the first byte two files diverse,
+                and only download the different part */
+            shared_ptr<LNode> local_node;
+            if (m_local_path_nodes.find(n_dest_path.string()) == m_local_path_nodes.end()) {
+                ofstream of(n_dest_path.string(), ios_base::binary|ios_base::out|ios_base::trunc);
+                local_node = make_shared<LNode>();
+                m_local_path_nodes[n_dest_path.string()] = local_node;
+                local_node->setPath(n_dest_path);
+                // todo: set properties
+            }
+            
+            fstream iof(n_dest_path.string(), ios_base::binary|ios_base::out|ios_base::in);
+            size_t const local_filesize = readLocalFilesize(iof);
+            size_t offset = 0;
+            if (! n->isNote()) {
+                // doesn't quite work with notes
+                offset = bisectDptFileBytes(n, iof); // where the difference starts
+            }
             #if DEBUG_FILE_IO
-            logger() << "writing file: " << n_dest_path << endl;
+                logger() << "writing file (offset=" 
+                         << offset << ","
+                         << std::hex << offset << std::dec 
+                         << "): " << n_dest_path << endl;
             #endif
-            ofstream of(n_dest_path.string(), std::ios_base::binary|std::ios_base::trunc);
-            size_t bytes;
-            unsigned char const* data = response->data(bytes);
-            of.write(reinterpret_cast<char const*>(data), bytes);
+            
+            iof.seekp(offset, ios_base::beg);
+            while (offset < dpt_filesize) {
+                auto const data = readDptFileBytes(n, offset, 128*KB);
+                size_t const bytes = data->size();
+                iof.write(reinterpret_cast<char*>(data->data()), bytes);
+                offset = min(offset+bytes, dpt_filesize);
+                int percentage = (offset*100)/dpt_filesize;
+                m_messager("Downloading " + n->filename() + " " + to_string(percentage) + "%");
+                #if DEBUG_FILE_IO
+                    logger() << "writing " << percentage << "% " << offset << "/" << dpt_filesize << endl;
+                #endif
+            }
+            /* pad zeros */
+            if (offset < local_filesize) {
+                #if DEBUG_FILE_IO
+                    logger() << "padding zeros..." << endl;
+                #endif
+                while (offset < local_filesize) {
+                    iof.put('\0');
+                    offset++;
+                }
+            }
+            #if DEBUG_FILE_IO
+                logger() << "done writing file" << endl;
+            #endif
         }
     }
+}
+
+shared_ptr<vector<uint8_t>> Dpt::readDptFileBytes(shared_ptr<DNode const> n, size_t offset, size_t size) const
+{
+    auto request = httpRequest("/documents/" + n->id() + "/file");
+    request->setMethod("GET");
+    request->headerMap()["Range"] = "bytes=" + to_string(offset) + "-" + to_string(offset+size-1);
+    auto response = sendRequest(request);
+    size_t bytes;
+    unsigned char const* data = response->data(bytes);
+    auto const rtv = make_shared<vector<uint8_t>>(data, data+bytes);
+    assert(rtv->size() == bytes);
+    return rtv;
 }
 
 bool dpt::syncable(path const& path)
@@ -886,9 +973,25 @@ bool dpt::syncable(path const& path)
     return is_directory(path) || (is_regular_file(path) && path.extension() == ".pdf");
 }
 
+size_t dpt::readLocalFilesize(istream& inf)
+{
+    inf.seekg(0, inf.end);
+    return inf.tellg();
+}
+
+shared_ptr<vector<uint8_t>> dpt::readLocalFileBytes(istream& inf, size_t offset, size_t size)
+{
+    size_t filesize = readLocalFilesize(inf);
+    size = min(size, filesize - offset);
+    inf.seekg(offset);
+    auto buffer = make_shared<vector<uint8_t>>(size);
+    inf.read(reinterpret_cast<char*>(buffer->data()), size);
+    return buffer;
+}
+
 void Dpt::overwriteToDpt(path const& source, path const& dest) {
     #if DEBUG_FILE_IO
-    logger() << "copying local~>dpt: " << source << " ~> " << dest << endl;
+        logger() << "copying local~>dpt: " << source << " ~> " << dest << endl;
     #endif
     /* keep track of created folder ids */
     shared_ptr<DNode const> dest_parent_node = m_dpt_path_nodes[dest.parent_path().string()];
@@ -934,59 +1037,96 @@ void Dpt::overwriteToDpt(path const& source, path const& dest) {
             new_node->setId(new_id);
         } else {
             /* process file */
-            string file_id;
+            ifstream infile(n.string(), ios_base::binary|ios_base::in);
+            size_t const local_filesize = readLocalFilesize(infile);
+            size_t const KB = 1024;
+            /* if local file exists, then bisect for the first byte two files diverse,
+                and only download the different part */
+            shared_ptr<DNode> dpt_node;
             // if file exists
             if (m_dpt_path_nodes.find(n_dest_path.string()) == m_dpt_path_nodes.end()) {
                 #if DEBUG_FILE_IO
-                    logger() << "creating file dpt: " << n_dest_path << endl;
+                    logger() << "creating file on dpt: " << n_dest_path << endl;
                 #endif
                 Json js;
                 js.put("parent_folder_id", m_dpt_path_nodes[n_dest_path.parent_path().string()]->id());
                 js.put("file_name", n_dest_path.filename().string());
                 Json resp = sendJson("POST", "/documents2", js);
-                file_id = resp.get<string>("document_id");
-                auto new_node = make_shared<DNode>();
-                new_node->setPath(n_dest_path.string());
-                new_node->setFilename(n_dest_path.filename().string());
-                new_node->setId(file_id);
-                new_node->setIsDir(false);
-                m_dpt_path_nodes[n_dest_path.string()] = new_node;
-            } else {
-                #if DEBUG_FILE_IO
-                    logger() << "file exists on dpt, skipped creation: " << n_dest_path << endl;
-                #endif 
-                file_id = m_dpt_path_nodes[n_dest_path.string()]->id();
+                dpt_node = make_shared<DNode>();
+                dpt_node->setPath(n_dest_path.string());
+                dpt_node->setFilename(n_dest_path.filename().string());
+                dpt_node->setId(resp.get<string>("document_id"));
+                dpt_node->setIsDir(false);
+                dpt_node->setFilesize(0);
+                m_dpt_path_nodes[n_dest_path.string()] = dpt_node;
             }
+            dpt_node = m_dpt_path_nodes[n_dest_path.string()];
+            /* partially write to file is not supported on DPT */ 
+            size_t offset = 0; 
+            size_t const new_filesize = local_filesize;
+            
             #if DEBUG_FILE_IO
-            logger() << "writing file: " << n_dest_path << endl;
+                logger() << "writing file (offset=" 
+                         << offset << ","
+                         << std::hex << offset << std::dec 
+                         << "): " << n_dest_path << endl;
             #endif
-            ifstream inf(n.string(), std::ios_base::in|std::ios_base::binary);
-            /* get size of file */
-            inf.seekg(0, inf.end);
-            size_t size = inf.tellg();
-            inf.seekg(0);
-            vector<char> buffer(size);
-            inf.read(buffer.data(), size);
-            /* send requet */
-            auto request = httpRequest("/documents/" + file_id + "/file");
-            request->setMethod("PUT");
-            request->headerMap()["Content-Type"] = "multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW";
-            stringstream ss(ios_base::in|ios_base::out|ios_base::binary);
-            ss << "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\nContent-Disposition: form-data; name=\"file\"; filename=\"" 
-               << n_dest_path.filename().string() 
-               << "\"\r\nContent-Type: application/pdf\r\n\r\n";
-            ss.write(buffer.data(), size);
-            ss << "\r\n------WebKitFormBoundary7MA4YWxkTrZu0gW--\r\n";
-            ss.seekp(0, ss.end);
-            size_t offset = ss.tellp();
-            ss.seekp(0);
-            vector<char> message(offset);
-            ss.read(message.data(), offset);
-            request->setData(reinterpret_cast<unsigned char const*>(message.data()), offset);
-            logger() << readResponse(sendRequest(request)) << endl;
+            while (offset < local_filesize) {
+                auto const data = readLocalFileBytes(infile, offset, 128*KB);
+                size_t bytes = data->size();
+                writeDptFileBytes(dpt_node, offset, new_filesize, data);
+                offset = min(offset+bytes, local_filesize);
+                int percentage = (offset*100)/local_filesize;
+                m_messager("Uploading " + dpt_node->filename() + " " + to_string(percentage) + "%");
+                #if DEBUG_FILE_IO
+                    logger() << "writing " << percentage << "% " << offset << "/" << local_filesize << endl;
+                #endif
+            }
+            /* pad zeros */
+            /*
+            if (offset < new_filesize) {
+                #if DEBUG_FILE_IO
+                    logger() << "padding zeros..." << endl;
+                #endif
+                while (offset < new_filesize) {
+                    auto zeros = make_shared<vector<uint8_t>>();
+                    zeros->push_back('\0');
+                    writeDptFileBytes(dpt_node, offset, new_filesize, zeros);
+                    offset++;
+                }
+            }
+            */
+            #if DEBUG_FILE_IO
+                logger() << "done writing file" << endl;
+            #endif
         }
     }
 }
+
+void Dpt::writeDptFileBytes(shared_ptr<DNode const> node, size_t offset, size_t total, shared_ptr<vector<uint8_t>> bytes) const 
+{
+    assert(total);
+    assert(bytes->size());
+    assert(offset + bytes->size() <= total);
+    auto request = httpRequest("/documents/" + node->id() + "/file?offset_bytes=" + to_string(offset) + "&total_bytes=" + to_string(total) + "&last_byte=" + to_string(offset + bytes->size()));
+    request->setMethod("PUT");
+    request->headerMap()["Content-Type"] = "multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW";
+    /* build header */
+    stringstream ss(ios_base::in|ios_base::out|ios_base::binary);
+    ss << "------WebKitFormBoundary7MA4YWxkTrZu0gW\r\nContent-Disposition: form-data; name=\"file\"; filename=\"" 
+        << node->path().string() 
+        << "\"\r\nContent-Type: application/pdf\r\n\r\n";
+    ss.write(reinterpret_cast<char*>(bytes->data()), bytes->size());
+    ss << "\r\n------WebKitFormBoundary7MA4YWxkTrZu0gW--\r\n";
+    ss.seekp(0, ss.end);
+    size_t sslen = ss.tellp();
+    ss.seekp(0);
+    vector<char> message(sslen);
+    ss.read(message.data(), sslen);
+    request->setData(reinterpret_cast<unsigned char const*>(message.data()), sslen);
+    sendRequest(request);
+}
+
 
 void Dpt::deleteFromLocal(path const& file) {
     boost::filesystem::remove_all(file);
