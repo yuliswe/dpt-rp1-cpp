@@ -572,8 +572,8 @@ void Dpt::computeSyncFiles()
     for (auto const& local : m_local_only_nodes) {
         #if DEBUG_CONFLICT
             logger() << "--------------------- processing ---------------------" << endl
-                 << local->filename() << endl 
-                 << "no matching dpt file" << endl 
+                 << "local: " << local->filename() << endl 
+                 << "dpt: no match" << endl 
                  << "------------------------------------------------------" << endl;
         #endif
         vector<string> db_row = m_rev_db.getByRelPath(local->relPath());
@@ -594,8 +594,8 @@ void Dpt::computeSyncFiles()
     for (auto const& dpt : m_dpt_only_nodes) {
         #if DEBUG_CONFLICT
             logger() << "--------------------- processing ---------------------" << endl
-                 << "no matching local file" << endl 
-                 << dpt->filename() << endl 
+                 << "local: no match" << endl 
+                 << "dpt: " << dpt->filename() << endl 
                  << "------------------------------------------------------" << endl;
         #endif
         vector<string> db_row = m_rev_db.getByRelPath(dpt->relPath());
@@ -621,8 +621,8 @@ void Dpt::computeSyncFiles()
         auto const& dpt = ld->second;
         #if DEBUG_CONFLICT
             logger() << "--------------------- processing ---------------------" << endl
-                 << local->filename() << endl 
-                 << dpt->filename() << endl
+                 << "local: " << local->filename() << endl 
+                 << "dpt: " << dpt->filename() << endl
                  << "------------------------------------------------------" << endl;
         #endif
         vector<string> db_row = m_rev_db.getByLocalRev(local->rev());
@@ -649,15 +649,15 @@ void Dpt::computeSyncFiles()
             // }
         } else {
             #if DEBUG_CONFLICT
-                logger() << "relpath was seen before" << endl;
+                logger() << "relpath found in db" << endl;
             #endif
             if (db_row[LocalRev] == local->rev()) {
                 #if DEBUG_CONFLICT
-                    logger() << "local version was unchanged" << endl;
+                    logger() << "local version unchanged" << endl;
                 #endif
                 if (db_row[DptRev] == dpt->rev()) {
                     #if DEBUG_CONFLICT
-                        logger() << "dpt version was unchanged" << endl;
+                        logger() << "dpt version unchanged" << endl;
                     #endif
                     /* file is unchanged */
                     if (local->relPath() != dpt->relPath()) {
@@ -696,7 +696,7 @@ void Dpt::computeSyncFiles()
                 #endif
                 if (db_row[DptRev] == dpt->rev()) {
                     #if DEBUG_CONFLICT
-                        logger() << "dpt version was unchanged" << endl;
+                        logger() << "dpt version unchanged" << endl;
                     #endif
                     /* local file is newer */
                     m_prepared_overwrite_to_dpt.push_back(local);
@@ -1146,7 +1146,7 @@ void Dpt::safeSyncAllFiles(DryRunFlag dryrun)
             return;
         }
         if (dryrun) {
-            logger() << "Action was aborted due to dry-run flag." << endl;
+            logger() << "Action aborted due to dry-run flag." << endl;
             return;
         }
     }
