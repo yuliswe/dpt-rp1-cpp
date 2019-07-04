@@ -18,6 +18,7 @@
 #include <queue>
 #include <unordered_set>
 #include <git2.h>
+#include <csignal>
 
 using namespace dpt;
 using namespace std;
@@ -951,6 +952,10 @@ void Dpt::overwriteFromDpt(path const& source, path const& dest)
 
 shared_ptr<vector<uint8_t>> Dpt::readDptFileBytes(shared_ptr<DNode const> n, size_t offset, size_t size) const
 {
+    /* handle interrupt for lengthy operation */
+    if (dpt::interrupt_flag) {
+        throw "interrupt";
+    }
     auto request = httpRequest("/documents/" + n->id() + "/file");
     request->setMethod("GET");
     request->headerMap()["Range"] = "bytes=" + to_string(offset) + "-" + to_string(offset+size-1);
@@ -1105,6 +1110,10 @@ void Dpt::overwriteToDpt(path const& source, path const& dest) {
 
 void Dpt::writeDptFileBytes(shared_ptr<DNode const> node, size_t offset, size_t total, shared_ptr<vector<uint8_t>> bytes) const 
 {
+    /* handle interrupt for lengthy operation */
+    if (dpt::interrupt_flag) {
+        throw "interrupt";
+    }
     assert(total);
     assert(bytes->size());
     assert(offset + bytes->size() <= total);
@@ -1316,6 +1325,11 @@ void Dpt::safeSyncAllFiles(DryRunFlag dryrun)
         m_git->commit("<local pre-sync checkpoint>\n\n" + status);
     }
     try {
+            signal(SIGINT, [](int sig) {
+                if (SIGINT == sig) {
+                    dpt::interrupt_flag = 1;
+                }
+            });  
             {   
                 m_messager("Creating Backup...");
                 /* backup files about to be changed on dpt */

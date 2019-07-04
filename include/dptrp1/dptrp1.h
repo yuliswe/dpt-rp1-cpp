@@ -15,6 +15,7 @@
 #include "dtree.h"
 #include "revdb.h"
 #include "git.h"
+#include <atomic>
 
 namespace dpt {
 
@@ -27,6 +28,8 @@ namespace dpt {
 
     using boost::property_tree::ptree;
     using boost::filesystem::path;
+
+    inline atomic<int> interrupt_flag = 0;
 
     enum DryRunFlag {
         NormalRun = 0,
