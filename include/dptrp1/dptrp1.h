@@ -124,7 +124,6 @@ namespace dpt {
             string baseUrl() const;
             void updateLocalTree();
             void updateDptTree();
-            void updateDptNode(shared_ptr<DNode> node);
             string git(string const& command) const;
             shared_ptr<vector<uint8_t>> readDptFileBytes(shared_ptr<DNode const> node, size_t offset, size_t size) const;
             void writeDptFileBytes(shared_ptr<DNode const> node, size_t offset, size_t total, shared_ptr<vector<uint8_t>> bytes) const;

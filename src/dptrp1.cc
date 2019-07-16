@@ -372,6 +372,8 @@ void Dpt::updateLocalNode(shared_ptr<DNode> node, path const& local_path)
                 continue;
             }
             auto child = make_shared<DNode>();
+            ifstream inf(i.path().c_str(), ios_base::binary|ios_base::in);
+            child->setFilesize(readLocalFilesize(inf));
             node->addChild(child);
             updateLocalNode(child, i.path());
         }
@@ -636,8 +638,8 @@ void Dpt::computeSyncFiles()
         auto const& dpt = ld->second;
         #if DEBUG_CONFLICT
             logger() << "--------------------- processing ---------------------" << endl
-                 << "local: " << local->filename() << endl 
-                 << "dpt: " << dpt->filename() << endl
+                 << "local: " << local->filename() << " " << local->filesize() << endl 
+                 << "dpt: " << dpt->filename() << " " << dpt->filesize() << endl
                  << "------------------------------------------------------" << endl;
         #endif
         vector<string> db_row = m_rev_db.getByLocalRev(local->rev());
@@ -1218,9 +1220,10 @@ void Dpt::reportComputedSyncFiles()
         for (auto const& i : m_prepared_local_new) {
             logger() << " - ";
             if (i->isDir()) {
-                logger() << "(folder) ";
+                logger() << i->relPath() << " (folder)" << endl;
+            } else {
+                logger() << i->relPath() << " (" << i->filesize() << ")"<< endl;
             }
-            logger() << i->relPath() << endl;
         }
         logger() << endl;
     }
@@ -1229,9 +1232,10 @@ void Dpt::reportComputedSyncFiles()
         for (auto const& i : m_prepared_dpt_new) {
             logger() << " - ";
             if (i->isDir()) {
-                logger() << "(folder) ";
+                logger() << i->relPath() << " (folder)" << endl;
+            } else {
+                logger() << i->relPath() << " (" << i->filesize() << ")"<< endl;
             }
-            logger() << i->relPath() << endl;
         }
         logger() << endl;
     }
@@ -1240,9 +1244,10 @@ void Dpt::reportComputedSyncFiles()
         for (auto const& i : m_prepared_overwrite_to_dpt) {
             logger() << " - ";
             if (i->isDir()) {
-                logger() << "(folder) ";
+                logger() << i->relPath() << " (folder)" << endl;
+            } else {
+                logger() << i->relPath() << " (" << i->filesize() << ")"<< endl;
             }
-            logger() << i->relPath() << endl;
         }
         logger() << endl;
     }
@@ -1251,9 +1256,10 @@ void Dpt::reportComputedSyncFiles()
         for (auto const& i : m_prepared_overwrite_from_dpt) {
             logger() << " - ";
             if (i->isDir()) {
-                logger() << "(folder) ";
+                logger() << i->relPath() << " (folder)" << endl;
+            } else {
+                logger() << i->relPath() << " (" << i->filesize() << ")"<< endl;
             }
-            logger() << i->relPath() << endl;
         }
         logger() << endl;
     }
