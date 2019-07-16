@@ -84,7 +84,7 @@ namespace dpt {
             unordered_map<string,shared_ptr<LNode>> m_local_revision_nodes;
             std::function<void(string const&)> m_messager = [](string const&) { };
             
-            ostream* m_logger = &std::cerr;
+            ostream* m_logger = &std::cout;
             ostream& logger() const;
             
             vector<shared_ptr<DNode const>> m_local_only_nodes;
