@@ -868,10 +868,10 @@ void Dpt::overwriteFromDpt(path const& source, path const& dest)
     // create_directories(dest.parent_path(), error);
     /* BFS */
     auto source_node = m_dpt_path_nodes[source.string()];
-    std::queue<shared_ptr<DNode const>> que;
+    std::queue<shared_ptr<DNode>> que;
     que.push(source_node);
     while (! que.empty()) {
-        shared_ptr<DNode const> n = que.front();
+        shared_ptr<DNode> n = que.front();
         que.pop();
         /* compute dest path */
         auto p = n->path().begin();
@@ -896,7 +896,7 @@ void Dpt::overwriteFromDpt(path const& source, path const& dest)
             create_directory(n_dest_path);
         } else {
             /* process file */
-            size_t const dpt_filesize = n->filesize();
+            size_t const dpt_filesize = readDptFilesize(n);
             size_t const KB = 1024; // 1MB in bytes
             /* if local file exists, then bisect for the first byte two files diverse,
                 and only download the different part */
@@ -984,6 +984,17 @@ size_t dpt::readLocalFilesize(istream& inf)
 {
     inf.seekg(0, inf.end);
     return inf.tellg();
+}
+
+size_t Dpt::readDptFilesize(shared_ptr<DNode> node)
+{
+    /* Sometimes DPT-RP1 reports wrong filesize initially. This looks like a bug
+        on DPT-RP1. We can force DPT-RP1 to update the file by reading a random
+        byte of the file */
+    readDptFileBytes(node, 0, 1);
+    Json json = sendJson("GET", "/documents/" + node->id());
+    node->setFilesize(json.get<size_t>("file_size"));
+    return node->filesize();
 }
 
 shared_ptr<vector<uint8_t>> dpt::readLocalFileBytes(istream& inf, size_t offset, size_t size)

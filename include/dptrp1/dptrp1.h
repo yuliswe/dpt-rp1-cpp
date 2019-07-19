@@ -156,6 +156,7 @@ namespace dpt {
             void updateGitCommits();
             void extractGitCommit(string const& commit, path const& dest);
             vector<shared_ptr<GitCommit>> listGitCommits(size_t limit = 100) const;
+            size_t readDptFilesize(shared_ptr<DNode> node);
     };
 
     class HttpSigner {
