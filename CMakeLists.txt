@@ -12,10 +12,12 @@ add_library(
     src/dtree.cc
     src/revdb.cc
     src/git.cc
+    src/exception.cc
     include/dptrp1/dptrp1.h
     include/dptrp1/dtree.h
     include/dptrp1/revdb.h
     include/dptrp1/git.h
+    include/dptrp1/exception.h
 )
 
 file(COPY templates/rev_db DESTINATION ${CMAKE_CURRENT_BINARY_DIR})

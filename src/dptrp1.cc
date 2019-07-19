@@ -19,6 +19,7 @@
 #include <unordered_set>
 #include <git2.h>
 #include <csignal>
+#include <dptrp1/exception.h>
 
 using namespace dpt;
 using namespace std;
@@ -956,7 +957,7 @@ shared_ptr<vector<uint8_t>> Dpt::readDptFileBytes(shared_ptr<DNode const> n, siz
 {
     /* handle interrupt for lengthy operation */
     if (dpt::interrupt_flag) {
-        throw "interrupt";
+        throw SyncInterrupted();
     }
     auto request = httpRequest("/documents/" + n->id() + "/file");
     request->setMethod("GET");
@@ -1121,11 +1122,11 @@ void Dpt::overwriteToDpt(path const& source, path const& dest) {
     }
 }
 
-void Dpt::writeDptFileBytes(shared_ptr<DNode const> node, size_t offset, size_t total, shared_ptr<vector<uint8_t>> bytes) const 
+void Dpt::writeDptFileBytes(shared_ptr<DNode const> node, size_t offset, size_t total, shared_ptr<vector<uint8_t>> bytes) const
 {
     /* handle interrupt for lengthy operation */
     if (dpt::interrupt_flag) {
-        throw "interrupt";
+        throw SyncInterrupted();
     }
     assert(total);
     assert(bytes->size());
@@ -1300,6 +1301,7 @@ void Dpt::reportComputedSyncFiles()
 
 void Dpt::safeSyncAllFiles(DryRunFlag dryrun)
 {
+    dpt::interrupt_flag = 0;
     {
         m_messager("Computing Differences...");
         dbOpen();
@@ -1386,6 +1388,13 @@ void Dpt::safeSyncAllFiles(DryRunFlag dryrun)
                 logger() << "All files are synced." << endl;
                 m_messager("All Up-to-Date");
             }
+    } catch(SyncInterrupted) {
+        m_messager("Sync Stopped");
+        logger() << "interrupted" << endl;
+        m_git->checkout("master");
+        m_git->addAll();
+        m_git->resetHard();
+        throw;
     } catch (...) {
         logger() << "An error happend during syncing, changes will be reverted." << endl;
         m_messager("Sync Failed");
@@ -1604,7 +1613,12 @@ void Dpt::extractGitCommit(string const& commit, path const& dest)
 ostream& dpt::operator<<(ostream& out, GitCommit& commit)
 {
     return out << commit.commit << endl
-               << commit.iso8601_time << endl 
+               << commit.iso8601_time << endl
                << commit.title << endl
                << commit.message << endl;
+}
+
+void Dpt::stop() {
+    m_messager("Stopping...");
+    dpt::interrupt_flag = 1;
 }
