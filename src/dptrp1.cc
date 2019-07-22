@@ -1620,3 +1620,20 @@ void Dpt::stop() {
     m_messager("Stopping...");
     dpt::interrupt_flag = 1;
 }
+
+Battery Dpt::battery() const
+{
+    Json response = sendJson("GET","/system/status/battery");
+    Battery battery;
+    battery.level = response.get<float>("level");
+    battery.pen = response.get<float>("pen");
+    string status = response.get<string>("status");
+    if (status == "charging") {
+        battery.status = Battery::Status::Charging;
+    } else if (status == "full") {
+        battery.status = Battery::Status::Full;
+    } else {
+        battery.status = Battery::Status::Discharging;
+    }
+    return battery;
+}

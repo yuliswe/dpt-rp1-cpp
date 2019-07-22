@@ -62,6 +62,13 @@ namespace dpt {
 
     ostream& operator<<(ostream& out, GitCommit& commit);
 
+    struct Battery {
+        float level;
+        float pen;
+        enum Status { Discharging, Charging, Full };
+        Status status;
+    };
+
     class Dpt
     {
         private:
@@ -158,6 +165,7 @@ namespace dpt {
             vector<shared_ptr<GitCommit>> listGitCommits(size_t limit = 100) const;
             size_t readDptFilesize(shared_ptr<DNode> node);
             void stop();
+            Battery battery() const;
     };
 
     class HttpSigner {
