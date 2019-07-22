@@ -71,15 +71,14 @@ void Dpt::authenticate()
     assert(! m_client_id_path.empty() && "don't forget to set client id");
 
     try {
-        m_messager("Authenticating...");
         m_cookies.clear();
-        
+
         string client_id;
         ifstream inf(m_client_id_path.string(), std::ios_base::in);
         inf >> client_id;
         #if DEBUG_AUTH
             logger() << "using client_id: " << client_id << endl;
-        #endif 
+        #endif
 
         using boost::property_tree::ptree;
         using boost::property_tree::write_json;
@@ -88,7 +87,7 @@ void Dpt::authenticate()
         string nonce = getNonce(client_id);
         #if DEBUG_AUTH
             logger() << "received nonce: " << nonce << endl;
-        #endif 
+        #endif
         string nonce_signed = signer.sign(nonce);
         /* write data to send */
         ptree data;
@@ -96,7 +95,7 @@ void Dpt::authenticate()
         data.put("nonce_signed", nonce_signed);
         #if DEBUG_AUTH
             logger() << "using nonce_signed: " << nonce_signed << endl;
-        #endif 
+        #endif
         ostringstream buf;
         write_json(buf, data, false);
         string json = buf.str();
@@ -111,9 +110,8 @@ void Dpt::authenticate()
         string const& credentials = set_cookie.substr(12, 64);
         #if DEBUG_AUTH
             logger() << "using credential: " << credentials << endl;
-        #endif 
+        #endif
         m_cookies["Credentials"] = credentials;
-
     } catch(...) {
         m_messager("Failed to Connect DPT-RP1");
         throw;
