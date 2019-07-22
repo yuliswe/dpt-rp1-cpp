@@ -167,15 +167,19 @@ shared_ptr<DptRequest> Dpt::httpRequest(string const& url) const
 }
 
 shared_ptr<DptResponse> Dpt::sendRequest(shared_ptr<DptRequest> request) const
-{    
+{
     #if DEBUG_REQUEST
         logger() << "request: " << request->serialise() << endl;
+    #endif
+    #if DEBUG_REQUEST_BODY
         logger() << "request body: " << request->body().substr(0,1000) << endl;
     #endif
     static auto client = nativeformat::http::createClient(nativeformat::http::standardCacheLocation(), "NFHTTP-" + nativeformat::http::version());
     auto resp = static_pointer_cast<DptResponse>(client->performRequestSynchronously(request));
     #if DEBUG_REQUEST
         logger() << "response: " << resp->serialise() << endl;
+    #endif
+    #if DEBUG_REQUEST_BODY
         logger() << "response body: "<< resp->body().substr(0,1000) << endl;
     #endif
     if (resp->statusCode() / 100 != 2) {
