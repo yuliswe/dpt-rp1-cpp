@@ -1,17 +1,17 @@
 #include <string>
 #include <memory>
-namespace dpt 
+namespace dpt
 {
 
 using namespace std;
 
-class DptFile 
+class DptFile
 {
 private:
-    string m_id;
+  string m_id;
 public:
-    static shared_ptr<DptFile> fromId(string const& id);
-    uint8_t readByte();
+  static shared_ptr<DptFile> fromId(string const& id);
+  uint8_t readByte();
 };
 
 };
