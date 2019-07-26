@@ -1,0 +1,5 @@
+namespace dpt {
+  class SyncInterrupted {
+
+  };
+};
