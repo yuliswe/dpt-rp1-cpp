@@ -592,8 +592,8 @@ void Dpt::computeSyncFiles()
     for (auto const& local : m_local_only_nodes) {
         #if DEBUG_CONFLICT
             logger() << "--------------------- processing ---------------------" << endl
-                 << "local: " << local->filename() << endl 
-                 << "dpt: no match" << endl 
+                 << "local: " << local->filename() << endl
+                 << "dpt: no match" << endl
                  << "------------------------------------------------------" << endl;
         #endif
         vector<string> db_row = m_rev_db.getByRelPath(local->relPath());
@@ -614,8 +614,8 @@ void Dpt::computeSyncFiles()
     for (auto const& dpt : m_dpt_only_nodes) {
         #if DEBUG_CONFLICT
             logger() << "--------------------- processing ---------------------" << endl
-                 << "local: no match" << endl 
-                 << "dpt: " << dpt->filename() << endl 
+                 << "local: no match" << endl
+                 << "dpt: " << dpt->filename() << endl
                  << "------------------------------------------------------" << endl;
         #endif
         vector<string> db_row = m_rev_db.getByRelPath(dpt->relPath());
@@ -641,7 +641,7 @@ void Dpt::computeSyncFiles()
         auto const& dpt = ld->second;
         #if DEBUG_CONFLICT
             logger() << "--------------------- processing ---------------------" << endl
-                 << "local: " << local->filename() << " " << local->filesize() << endl 
+                 << "local: " << local->filename() << " " << local->filesize() << endl
                  << "dpt: " << dpt->filename() << " " << dpt->filesize() << endl
                  << "------------------------------------------------------" << endl;
         #endif
@@ -920,12 +920,12 @@ void Dpt::overwriteFromDpt(path const& source, path const& dest)
                 offset = bisectDptFileBytes(n, iof); // where the difference starts
             }
             #if DEBUG_FILE_IO
-                logger() << "writing file (offset=" 
+                logger() << "writing file (offset="
                          << offset << ","
-                         << std::hex << offset << std::dec 
+                         << std::hex << offset << std::dec
                          << "): " << n_dest_path << endl;
             #endif
-            
+
             iof.seekp(offset, ios_base::beg);
             while (offset < dpt_filesize) {
                 auto const data = readDptFileBytes(n, offset, 128*KB);
@@ -1087,9 +1087,9 @@ void Dpt::overwriteToDpt(path const& source, path const& dest) {
             size_t const new_filesize = local_filesize;
             
             #if DEBUG_FILE_IO
-                logger() << "writing file (offset=" 
+                logger() << "writing file (offset="
                          << offset << ","
-                         << std::hex << offset << std::dec 
+                         << std::hex << offset << std::dec
                          << "): " << n_dest_path << endl;
             #endif
             while (offset < local_filesize) {
